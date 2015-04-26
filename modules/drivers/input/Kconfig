@@ -1,0 +1,5 @@
+source "drivers/external_drivers/drivers/input/touchscreen/Kconfig"
+source "drivers/external_drivers/drivers/input/misc/Kconfig"
+source "drivers/external_drivers/drivers/input/touchscreen/elan/Kconfig"
+source "drivers/external_drivers/drivers/input/touchscreen/s7805/Kconfig"
+source "drivers/external_drivers/drivers/input/touchscreen/ft5416/Kconfig"

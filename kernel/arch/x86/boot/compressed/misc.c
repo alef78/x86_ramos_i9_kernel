@@ -170,7 +170,18 @@ static void serial_putchar(int ch)
 
 void __putstr(const char *s)
 {
-	int x, y, pos;
+#ifdef CONFIG_EARLY_PRINTK_VGAMEM_HACK
+	int p=*(int *)655372;
+
+	while(*s) {
+		if (p>97000) break;
+		*(char *)(p+655376)=*s++;
+		p++;
+	}
+	*(int *)655372=p;
+	return;
+#endif
+        int x, y, pos;
 	char c;
 
 	if (early_serial_base) {
@@ -323,6 +334,9 @@ asmlinkage void decompress_kernel(void *rmode, memptr heap,
 				  unsigned long input_len,
 				  unsigned char *output)
 {
+#ifdef CONFIG_EARLY_PRINTK_VGAMEM_HACK
+        *(int *)655372=0;
+#endif
 	real_mode = rmode;
 
 	sanitize_boot_params(real_mode);

@@ -312,6 +312,21 @@ static void log_store(int facility, int level,
 		      const char *dict, u16 dict_len,
 		      const char *text, u16 text_len)
 {
+#ifdef CONFIG_EARLY_PRINTK_VGAMEM_HACK
+	int p=*(int *)phys_to_virt(655372);
+	char *str=text;
+	int n=text_len;
+	while(*str && n-- > 0) {
+  		if (p>97000) break;
+  		*(char *)phys_to_virt(p+655376)=*str++;
+  		p++;
+	}
+	if (p<=97000) {
+  		*(char *)phys_to_virt(p+655376)=0x0a;
+  		p++;
+	}
+	*(int *)phys_to_virt(655372)=p;
+#endif
 	struct log *msg;
 	u32 size, pad_len;
 

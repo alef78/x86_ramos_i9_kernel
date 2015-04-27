@@ -47,6 +47,10 @@ config EARLY_PRINTK_INTEL_MID
 	bool "Early printk for Intel MID platform support"
 	depends on EARLY_PRINTK && X86_INTEL_MID
 
+config EARLY_PRINTK_VGAMEM_HACK
+	bool "Early (and later) printk to 96K VGA memory @0xA0000"
+	depends on EARLY_PRINTK && X86_INTEL_MID
+
 config EARLY_PRINTK_DBGP
 	bool "Early printk via EHCI debug port"
 	depends on EARLY_PRINTK && PCI

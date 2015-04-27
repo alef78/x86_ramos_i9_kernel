@@ -843,7 +843,9 @@ void __init setup_arch(char **cmdline_p)
 			 (unsigned long)__bss_stop - (unsigned long)_text);
 
 	early_reserve_initrd();
-
+#ifdef CONFIG_EARLY_PRINTK_VGAMEM_HACK
+	memblock_reserve(655360,65536);
+#endif
 	/*
 	 * At this point everything still needed from the boot loader
 	 * or BIOS or kernel text should be early reserved or marked not

@@ -161,7 +161,7 @@ enum mrst_ssp_clk_mode {
 	SSP_CLK_MODE_3
 };
 
-#ifdef CONFIG_ACPI
+//#ifdef CONFIG_ACPI
 
 #define ACPI_FREQ_LEN 4
 
@@ -190,7 +190,7 @@ struct name_to_config_type {
 	enum ssp_config_type type;
 };
 
-#endif
+//#endif
 
 /*
  *	Structure used to configure the SSP Port

@@ -3483,6 +3483,7 @@ static const u8 intel_ssp_uuid_timings[] = {
 	0x5b, 0xd3, 0x66, 0x7a, 0x6c, 0x9a
 };
 
+#ifdef CONFIG_ACPI
 int
 i2s_get_ssp_param(acpi_handle handle, const u8 *intel_ssp_uuid,
 			acpi_object_type acpi_type,
@@ -3537,6 +3538,7 @@ i2s_get_ssp_param(acpi_handle handle, const u8 *intel_ssp_uuid,
 		return -ENODEV;
 	return 0;
 }
+#endif
 
 int i2s_acpi_probe(struct platform_device *platdev)
 {

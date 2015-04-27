@@ -38,6 +38,12 @@
 
 #define DRIVER_NAME "pmic_battery"
 
+extern int intel_scu_ipc_simple_command(int, int);
+extern int intel_scu_ipc_command(u32 cmd, u32 sub, u8 *in, u32 inlen,
+                u32 *out, u32 outlen);
+extern int intel_scu_ipc_ioread8(u16 addr, u8 *data);
+
+
 /*********************************************************************
  *		Generic defines
  *********************************************************************/

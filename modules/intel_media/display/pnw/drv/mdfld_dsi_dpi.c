@@ -35,8 +35,7 @@
 #include <asm/intel_scu_pmic.h>
 #include <linux/HWVersion.h>
 
-extern int Read_LCD_ID(void);
-extern int entry_mode;
+int entry_mode=0;
 
 
 #define BKL_EN_WKAD 1
@@ -56,7 +55,7 @@ void mdfld_vsync_delay_work(struct work_struct *work)
 {
 	intel_scu_ipc_iowrite8(PMIC_GPIO_BACKLIGHT_EN, 0x01);
 
-	if (Read_LCD_ID() == LCD_ID_HSD)
+//	if (Read_LCD_ID() == LCD_ID_HSD)
 		queue_delayed_work(vsync_delay_wq, &vsync_delay_work, msecs_to_jiffies(3000));
 }
 #endif

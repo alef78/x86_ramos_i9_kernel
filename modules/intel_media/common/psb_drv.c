@@ -69,13 +69,6 @@
 #include "mdfld_dsi_dpi.h"
 
 #include <linux/HWVersion.h>
-extern int Read_LCD_ID(void);
-extern int Read_PROJ_ID(void);
-
-
-u8 panel_name_FW[PANEL_NAME_MAX_LEN+1] = {0};
-static u8 *lcd_unique_id;
-
 
 struct workqueue_struct *te_wq;
 struct workqueue_struct *vsync_wq;
@@ -1128,7 +1121,7 @@ static bool intel_mid_get_vbt_data(struct drm_psb_private *dev_priv)
 			return false;
 		}
 
-		strncpy(panel_name_FW, panel_desc, PANEL_NAME_MAX_LEN);
+		strncpy(panel_name, panel_desc, PANEL_NAME_MAX_LEN);
 
 		mipi_mode =
 		((struct gct_r11_panel_desc *)panel_desc)->display.mode ? \
@@ -1147,7 +1140,7 @@ static bool intel_mid_get_vbt_data(struct drm_psb_private *dev_priv)
 			return false;
 		}
 
-		strncpy(panel_name_FW, panel_desc, PANEL_NAME_MAX_LEN);
+		strncpy(panel_name, panel_desc, PANEL_NAME_MAX_LEN);
 
 		mipi_mode =
 		((struct gct_r20_panel_desc *)panel_desc)->panel_mode.mode ?\
@@ -1159,67 +1152,42 @@ static bool intel_mid_get_vbt_data(struct drm_psb_private *dev_priv)
 		return false;
 	}
 
-	len = strnlen(panel_name_FW, PANEL_NAME_MAX_LEN);
+	len = strnlen(panel_name, PANEL_NAME_MAX_LEN);
 	if (len) {
-		strncpy(dev_priv->panel_info.name, panel_name_FW, len);
+		strncpy(dev_priv->panel_info.name, panel_name, len);
 		dev_priv->panel_info.mode = mipi_mode;
 	} else {
 		DRM_ERROR("%s: detect panel info from gct error\n",
 				__func__);
 		return false;
 	}
-	DRM_INFO("%s: FW panel name: %s, mipi_mode = %d !\n", __func__, panel_name_FW, mipi_mode);
+	DRM_INFO("%s: FW panel name: %s, mipi_mode = %d !\n", __func__, panel_name, mipi_mode);
 
-	if (Read_PROJ_ID() == PROJ_ID_A502CG) {
-		if (Read_LCD_ID() == A502CG_LCD_ID_TXD) {
-			printk("[DISP] DriverIC : ORISE9605A, Panel : TXD device registered!\n");
-			strncpy(panel_name, panel_name_FW, strlen("OTM9605A"));
-			mipi_mode = MDFLD_DSI_ENCODER_DPI;
-		} else if (Read_LCD_ID() == A502CG_LCD_ID_TM) {
-			printk("[DISP] DriverIC : RM68191, Panel : TM device registered!\n");
-			strncpy(panel_name, panel_name_FW, strlen("RM68191"));
-			mipi_mode = MDFLD_DSI_ENCODER_DPI;
-		} else if (Read_LCD_ID() == A502CG_LCD_ID_OFILM) {
-			printk("[DISP] DriverIC : ORISE8018B, Panel : OFILM device registered!\n");
-			strncpy(panel_name, panel_name_FW, strlen("OTM8018B"));
-			mipi_mode = MDFLD_DSI_ENCODER_DPI;
-		} else {
-			printk("[DISP] DriverIC : ORISE8018B, Panel : GIS device registered!\n");
-			strncpy(panel_name, panel_name_FW, strlen("OTM8018B"));
-			mipi_mode = MDFLD_DSI_ENCODER_DPI;
-		}
+	if (0) {
 	} else {
 #if defined(CONFIG_SUPPORT_MIPI_HX8394_DISPLAY) || defined(CONFIG_SUPPORT_MIPI_ORISE1283A_DISPLAY)
 		if(Read_PROJ_ID()==PROJ_ID_A600CG ){
 				printk("[DISP] DriverIC : ORISE1283A device registered!\n");
-				strncpy(panel_name, panel_name_FW, strlen("ORISE1283A"));
+				strncpy(panel_name, panel_name, strlen("ORISE1283A"));
 				mipi_mode = MDFLD_DSI_ENCODER_DPI;
 		} else {
 			if (Read_LCD_ID() == LCD_ID_TM) {
 				printk("[DISP] DriverIC : HX8394 SR device registered!\n");
-				strncpy(panel_name, panel_name_FW, strlen("HX8394"));
+				strncpy(panel_name, panel_name, strlen("HX8394"));
 				mipi_mode = MDFLD_DSI_ENCODER_DPI;
 			} else {
 #ifdef PANEL_HX8394_EVB
 				printk("[DISP] DriverIC : HX8394 EVB device registered!\n");
-				strncpy(panel_name, panel_name_FW, strlen("HX8394"));
+				strncpy(panel_name, panel_name, strlen("HX8394"));
 				mipi_mode = MDFLD_DSI_ENCODER_DPI;
 #else
 				printk("[DISP] DriverIC : ORISE1283A device registered!\n");
-				strncpy(panel_name, panel_name_FW, strlen("ORISE1283A"));
+				strncpy(panel_name, panel_name, strlen("ORISE1283A"));
 				mipi_mode = MDFLD_DSI_ENCODER_DPI;
 #endif
 			}
 		}
 #endif
-	}
-
-	if (strcmp(panel_name_FW, panel_name) == 0) {
-		lcd_unique_id = "ffffffff";
-		DRM_INFO("Unique ID : NONE\n");
-	} else {
-		lcd_unique_id = panel_name_FW+strlen(panel_name);
-		DRM_INFO("Unique ID : %s\n", lcd_unique_id);
 	}
 
 	pdev = platform_device_alloc(panel_name, -1);
@@ -5168,56 +5136,6 @@ static int dpst_level_write(struct file *file, const char *buffer,
 }
 #endif
 
-static int panel_id_read(struct file *file, char __user *buffer,
-				    size_t count, loff_t *ppos)
-{
-	int len = 0;
-	int lcd_id;
-	ssize_t ret = 0;
-	char *buff;
-
-	buff = kmalloc(100, GFP_KERNEL);
-	if(!buff)
-		return -ENOMEM;
-
-	lcd_id = Read_LCD_ID();
-
-	len += sprintf(buff + len, "%d\n", lcd_id);
-	ret = simple_read_from_buffer(buffer,count,ppos,buff,len);
-	kfree(buff);
-
-	return ret;
-}
-static int panel_id_write(struct file *file, const char *buffer,
-			  size_t count, loff_t *ppos)
-{
-	return 0;
-}
-
-static int lcd_unique_id_read(struct file *file, char __user *buffer,
-				    size_t count, loff_t *ppos)
-{
-	int len = 0;
-	ssize_t ret = 0;
-	char *buff;
-
-	buff = kmalloc(100, GFP_KERNEL);
-	if(!buff)
-		return -ENOMEM;
-
-	len += sprintf(buff + len, "%s\n", lcd_unique_id);
-	ret = simple_read_from_buffer(buffer,count,ppos,buff,len);
-	kfree(buff);
-
-	return ret;
-}
-static int lcd_unique_id_write(struct file *file, const char *buffer,
-			  size_t count, loff_t *ppos)
-{
-	return 0;
-}
-
-
 
 #ifdef CONFIG_CTP_DPST
 static const struct file_operations psb_dpst_proc_fops = {
@@ -5227,18 +5145,6 @@ static const struct file_operations psb_dpst_proc_fops = {
  };
 #endif
 
-static const struct file_operations psb_panel_id_proc_fops = {
-       .owner = THIS_MODULE,
-       .read = panel_id_read,
-       .write = panel_id_write,
- };
-
-static const struct file_operations psb_lcd_unique_id_proc_fops = {
-       .owner = THIS_MODULE,
-       .read = lcd_unique_id_read,
-       .write = lcd_unique_id_write,
- };
-
 
 
 static int __init psb_init(void)
@@ -5247,8 +5153,6 @@ static int __init psb_init(void)
 #ifdef CONFIG_CTP_DPST
 	struct proc_dir_entry *dpst_levels;
 #endif
-	struct proc_dir_entry *lcd_type;
-	struct proc_dir_entry *lcd_unique_id;
 
 #if defined(MODULE) && defined(CONFIG_NET)
 #ifdef CONFIG_SUPPORT_HDMI
@@ -5350,19 +5254,6 @@ static int __init psb_init(void)
 		return -EINVAL;
 	}
 #endif
-
-	lcd_type = proc_create(PANEL_ID_PROC_ENTRY, 0444, NULL, &psb_panel_id_proc_fops);
-	if (!lcd_type) {
-		DRM_ERROR("Unable to create %s\n", PANEL_ID_PROC_ENTRY);
-		return -EINVAL;
-	}
-
-	lcd_unique_id = proc_create(LCD_UNIQUE_ID_PROC_ENTRY, 0444, NULL, &psb_lcd_unique_id_proc_fops);
-	if (!lcd_unique_id) {
-		DRM_ERROR("Unable to create %s\n", LCD_UNIQUE_ID_PROC_ENTRY);
-		return -EINVAL;
-	}
-
 
 	return ret;
 }

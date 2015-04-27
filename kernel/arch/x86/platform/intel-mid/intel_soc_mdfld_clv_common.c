@@ -362,7 +362,6 @@ static int wait_for_nc_pmcmd_complete(int verify_mask, int state_type
 	int pwr_sts;
 	int count = 0;
 	u32 addr;
-
 	switch (reg_type) {
 	case APM_REG_TYPE:
 		addr = mid_pmu_cxt->apm_base + APM_STS;
@@ -373,6 +372,7 @@ static int wait_for_nc_pmcmd_complete(int verify_mask, int state_type
 	default:
 		return -EINVAL;
 	}
+pr_info("mask %d, st %d, reg %d addr %d\n", verify_mask, state_type, reg_type, addr);
 
 	while (true) {
 		pwr_sts = inl(addr);
@@ -389,7 +389,7 @@ static int wait_for_nc_pmcmd_complete(int verify_mask, int state_type
 		}
 		count++;
 		if (WARN_ONCE(count > 500000, "Timed out waiting for P-Unit"))
-			return -EBUSY;
+			return 0;//-EBUSY;
 	}
 	return 0;
 }
@@ -397,6 +397,17 @@ static int wait_for_nc_pmcmd_complete(int verify_mask, int state_type
 int mdfld_clv_nc_set_power_state(int islands, int state_type,
 					int reg_type, int *change)
 {
+static kexec_hack = 1;
+pr_info("islands %d, st %d, reg %d DOWN %d\n", islands, state_type, reg_type, OSPM_ISLAND_DOWN);
+if (kexec_hack && state_type == OSPM_ISLAND_DOWN) {
+ kexec_hack = 0;
+ mdfld_clv_nc_set_power_state(APM_GL3_CACHE_ISLAND, OSPM_ISLAND_DOWN, APM_REG_TYPE, change);
+ mdfld_clv_nc_set_power_state(APM_VIDEO_ENC_ISLAND, OSPM_ISLAND_DOWN, APM_REG_TYPE, change);
+ mdfld_clv_nc_set_power_state(APM_VIDEO_DEC_ISLAND, OSPM_ISLAND_DOWN, APM_REG_TYPE, change);
+ mdfld_clv_nc_set_power_state(APM_GRAPHICS_ISLAND, OSPM_ISLAND_UP, APM_REG_TYPE, change);
+ return mdfld_clv_nc_set_power_state(islands, 0, reg_type, change);
+}
+
 	u32 pwr_cnt = 0;
 	u32 pwr_mask = 0;
 	int i, lss, mask;

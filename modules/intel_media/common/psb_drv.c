@@ -118,6 +118,10 @@ int drm_msvdx_bottom_half;
 struct drm_device *g_drm_dev;
 EXPORT_SYMBOL(g_drm_dev);
 
+#ifdef CONFIG_LTL089CL02_MIPI_VIDEO_MODE
+extern struct platform_driver sp_ltl089cl02_lcd_driver;
+#endif
+
 #ifdef CONFIG_SUPPORT_MIPI_H8C7_CMD_DISPLAY
 extern struct platform_driver h8c7_lcd_driver;
 #endif
@@ -1152,6 +1156,9 @@ static bool intel_mid_get_vbt_data(struct drm_psb_private *dev_priv)
 		return false;
 	}
 
+#ifdef CONFIG_LTL089CL02_MIPI_VIDEO_MODE
+        strcpy(panel_name, "LTL089CL02");
+#endif
 	len = strnlen(panel_name, PANEL_NAME_MAX_LEN);
 	if (len) {
 		strncpy(dev_priv->panel_info.name, panel_name, len);
@@ -5179,6 +5186,13 @@ static int __init psb_init(void)
 		dev_priv = (struct drm_psb_private *)gpDrmDevice->dev_private;
 		if (dev_priv)
 			otm_hdmi_hpd_init();
+	}
+#endif
+
+#ifdef CONFIG_LTL089CL02_MIPI_VIDEO_MODE
+	ret = platform_driver_register(&sp_ltl089cl02_lcd_driver);
+	if (ret != 0) {
+		return ret;
 	}
 #endif
 

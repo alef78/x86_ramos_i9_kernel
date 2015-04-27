@@ -144,5 +144,9 @@ ifeq ($(CONFIG_R63311_MIPI_VIDEO_MODE), y)
 $(DRIVER_NAME)-objs += $(DISPLAYDIR)/r63311_vid.o
 endif
 
+ifeq ($(CONFIG_LTL089CL02_MIPI_VIDEO_MODE), y)
+$(DRIVER_NAME)-objs += $(DISPLAYDIR)/sp_ltl089cl02_vid.o
+endif
+
 obj-m += $(DRIVER_NAME).o
 

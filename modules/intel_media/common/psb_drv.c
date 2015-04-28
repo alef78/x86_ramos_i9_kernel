@@ -1554,7 +1554,6 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	uint32_t tt_pages;
 	int i = 0;
 
-pr_info("psb_driver_load\n");
 	DRM_INFO("psb - %s\n", PSB_PACKAGE_VERSION);
 
 	dev_priv = kzalloc(sizeof(*dev_priv), GFP_KERNEL);
@@ -1577,7 +1576,6 @@ pr_info("psb_driver_load\n");
 	else
 		dev_priv->num_pipe = 2;
 
-pr_info("psb_driver_load 2\n");
 	/*init DPST umcomm to NULL*/
 	dev_priv->psb_dpst_state = NULL;
 
@@ -1716,7 +1714,6 @@ pr_info("psb_driver_load 2\n");
 	get_imr_info(dev_priv);
 
 	/* Init OSPM support */
-pr_info("psb_driver_load ospm\n");
 	ospm_power_init(dev);
 
 #ifdef CONFIG_MDFD_VIDEO_DECODE
@@ -3450,7 +3447,7 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 				if (!ret) {
 					DRM_ERROR("Pipe %d vsync time out\n",
 							pipe);
-					mdfld_reset_dpi_panel(dev_priv);
+					//mdfld_reset_dpi_panel(dev_priv);
 				}
 			}
 

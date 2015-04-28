@@ -58,6 +58,7 @@ ccflags-y += $(PVRDEFS-y)
 
 $(DRIVER_NAME)-objs += $(FBDEVDIR)/drmlfb_displayclass.o \
 	$(FBDEVDIR)/drmlfb_linux.o \
+	$(MEDIA_COMMON_DIR)/mdfld_gl3.o \
 	$(MEDIA_COMMON_DIR)/psb_drv.o \
 	$(MEDIA_COMMON_DIR)/psb_powermgmt.o \
 	$(MEDIA_COMMON_DIR)/psb_irq.o \

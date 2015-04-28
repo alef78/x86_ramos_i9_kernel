@@ -30,6 +30,7 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <asm/intel_scu_ipc.h>
+#include <asm/intel_scu_pmic.h>
 
 static struct i2c_client *tc35876x_client;
 static struct i2c_client *cmi_lcd_i2c_client;

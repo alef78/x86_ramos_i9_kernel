@@ -113,11 +113,11 @@ endif
 
 obj-$(subst m,y,$(CONFIG_EXTCON_USB))					+= platform_extcon_usb.o
 obj-$(subst m,y,$(CONFIG_BATTERY_BQ27X00))				+= platform_bq27x00.o
-#ifdef CONFIG_BATTERY_MAX17042
-#obj-$(subst m,y,$(CONFIG_BATTERY_MAX17042)) += platform_max17042.o
-#else
-#obj-$(subst m,y,$(CONFIG_BATTERY_MAX17050)) += platform_max17042.o
-#endif
+ifdef CONFIG_BATTERY_MAX17042
+obj-$(subst m,y,$(CONFIG_BATTERY_MAX17042)) += platform_max17042.o
+else
+obj-$(subst m,y,$(CONFIG_BATTERY_MAX17050)) += platform_max17042.o
+endif
 obj-$(subst m,y,$(CONFIG_CHARGER_SMB347))				+= platform_smb347.o
 # Panel Control Device
 obj-$(subst m,y,$(CONFIG_DRM_MRFLD)) += platform_panel.o
@@ -130,3 +130,4 @@ obj-$(subst m,y,$(CONFIG_MMC_SDHCI_ACPI)) += platform_sdio_regulator.o
 obj-$(subst m,y,$(CONFIG_SCU_LOGGING)) += platform_scu_log.o
 # Display Control Device
 obj-y += platform_display.o
+obj-y += platform_ft5x0x_ts.o

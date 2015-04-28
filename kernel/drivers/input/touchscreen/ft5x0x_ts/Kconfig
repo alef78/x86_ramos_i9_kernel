@@ -1,0 +1,6 @@
+config TOUCHSCREEN_FT5X0X
+	tristate "FT5X0X I2C Touchscreen"
+	depends on I2C
+	default n
+	help
+	if unsure, say N.

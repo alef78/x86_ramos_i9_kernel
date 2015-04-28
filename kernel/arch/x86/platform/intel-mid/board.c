@@ -87,6 +87,7 @@
 #include "device_libs/platform_lsm303.h"
 #include "device_libs/platform_apds990x.h"
 #include "device_libs/platform_a1026.h"
+#include "device_libs/platform_ft5x0x_ts.h"
 
 /* SW devices */
 #include "device_libs/platform_panel.h"
@@ -198,6 +199,8 @@ struct devs_id __initconst device_ids[] = {
 	{"apds990x", SFI_DEV_TYPE_I2C, 0, &apds990x_platform_data},
         {"bh1721als", SFI_DEV_TYPE_I2C, 0, &no_platform_data, NULL},
         {"lis3dh_acc", SFI_DEV_TYPE_I2C, 0, &no_platform_data, NULL},
+	{"ft5x0x_ts", SFI_DEV_TYPE_I2C, 0, &ft5x0x_platform_data, NULL},
+
 	/* MSIC subdevices */
 	{"msic_adc", SFI_DEV_TYPE_IPC, 1, &msic_adc_platform_data,
 						&ipc_device_handler},

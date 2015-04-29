@@ -13,3 +13,4 @@ known problems / todo list:
 1) partially distorted screen (some problem with vblank/vsync in video driver)
 2) sound initiatization takes about 12 seconds during kernel boot (but sound works after that)
 3) not tested bt/wifi yet, because of (1)
+4) bma250 (accelerometer) and camera drivers are not there yet.

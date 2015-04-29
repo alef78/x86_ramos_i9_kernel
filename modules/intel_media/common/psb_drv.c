@@ -1168,7 +1168,7 @@ static bool intel_mid_get_vbt_data(struct drm_psb_private *dev_priv)
 				__func__);
 		return false;
 	}
-	DRM_INFO("%s: FW panel name: %s, mipi_mode = %d !\n", __func__, panel_name, mipi_mode);
+//	DRM_INFO("%s: FW panel name: %s, mipi_mode = %d !\n", __func__, panel_name, mipi_mode);
 
 	if (0) {
 	} else {

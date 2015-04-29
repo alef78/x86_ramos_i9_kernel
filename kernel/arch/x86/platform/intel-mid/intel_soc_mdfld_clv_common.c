@@ -397,11 +397,13 @@ pr_info("mask %d, st %d, reg %d addr %d\n", verify_mask, state_type, reg_type, a
 int mdfld_clv_nc_set_power_state(int islands, int state_type,
 					int reg_type, int *change)
 {
-static kexec_hack = 1;
+static int kexec_hack = 1;
 pr_info("islands %d, st %d, reg %d DOWN %d\n", islands, state_type, reg_type, OSPM_ISLAND_DOWN);
 if (kexec_hack && state_type == OSPM_ISLAND_DOWN) {
  kexec_hack = 0;
- mdfld_clv_nc_set_power_state(APM_GL3_CACHE_ISLAND, OSPM_ISLAND_DOWN, APM_REG_TYPE, change);
+ //mdfld_clv_nc_set_power_state(APM_ISP_ISLAND, OSPM_ISLAND_DOWN, APM_REG_TYPE, change);
+ //mdfld_clv_nc_set_power_state(APM_IPH_ISLAND, OSPM_ISLAND_DOWN, APM_REG_TYPE, change);
+ //mdfld_clv_nc_set_power_state(APM_GL3_CACHE_ISLAND, OSPM_ISLAND_DOWN, APM_REG_TYPE, change);
  mdfld_clv_nc_set_power_state(APM_VIDEO_ENC_ISLAND, OSPM_ISLAND_DOWN, APM_REG_TYPE, change);
  mdfld_clv_nc_set_power_state(APM_VIDEO_DEC_ISLAND, OSPM_ISLAND_DOWN, APM_REG_TYPE, change);
  mdfld_clv_nc_set_power_state(APM_GRAPHICS_ISLAND, OSPM_ISLAND_UP, APM_REG_TYPE, change);

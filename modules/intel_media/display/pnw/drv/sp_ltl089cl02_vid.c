@@ -223,8 +223,8 @@ static int mdfld_dsi_ltl089cl02_set_brightness(struct mdfld_dsi_config *dsi_conf
 					int level)
 {
         if (level < 0) level=0;
-        if (level > 0x64) level=0x64;
-	level *= 0x3c;
+        if (level > 100) level=100;
+	level *= 60;
 	level /= 100;
 	intel_scu_ipc_iowrite8(0x67, level);//todo
 	return 0;
@@ -248,11 +248,12 @@ static int sp_ltl089cl02_lcd_vid_probe(struct platform_device *pdev)
 	if (ret==0) {
 	  if (val!=1) {
 	    ret=intel_scu_ipc_iowrite8(0x38,1);
+	    if (ret) goto err;
 	  }
-	  intel_scu_ipc_iowrite8(0x62,8);
-	  intel_scu_ipc_iowrite8(0x61,0);
 	}
-
+	intel_scu_ipc_iowrite8(0x62,8);
+	intel_scu_ipc_iowrite8(0x61,0);
+err:
 	intel_mid_panel_register(sp_ltl089cl02_vid_init);
 
 	return 0;

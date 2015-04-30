@@ -372,7 +372,7 @@ static int wait_for_nc_pmcmd_complete(int verify_mask, int state_type
 	default:
 		return -EINVAL;
 	}
-pr_info("mask %d, st %d, reg %d addr %d\n", verify_mask, state_type, reg_type, addr);
+//pr_info("mask %d, st %d, reg %d addr %d\n", verify_mask, state_type, reg_type, addr);
 
 	while (true) {
 		pwr_sts = inl(addr);
@@ -398,7 +398,7 @@ int mdfld_clv_nc_set_power_state(int islands, int state_type,
 					int reg_type, int *change)
 {
 static int kexec_hack = 1;
-pr_info("islands %d, st %d, reg %d DOWN %d\n", islands, state_type, reg_type, OSPM_ISLAND_DOWN);
+//pr_info("islands %d, st %d, reg %d DOWN %d\n", islands, state_type, reg_type, OSPM_ISLAND_DOWN);
 if (kexec_hack && islands==48) {
  kexec_hack = 0;
  return mdfld_clv_nc_set_power_state(islands, 0, reg_type, change);

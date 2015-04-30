@@ -1806,6 +1806,9 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	ret = psb_do_init(dev);
 	if (ret)
 		return ret;
+        
+	// comparing lspci -vv shows that original ramos kernel or fw sets bus mastering for VGA somewhere
+        pci_set_master(dev->pdev);
 
 	if (pci_enable_msi(dev->pdev)) {
 		DRM_ERROR("Enable MSI failed!\n");
@@ -3447,7 +3450,7 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 				if (!ret) {
 					DRM_ERROR("Pipe %d vsync time out\n",
 							pipe);
-					//mdfld_reset_dpi_panel(dev_priv);
+					mdfld_reset_dpi_panel(dev_priv);
 				}
 			}
 

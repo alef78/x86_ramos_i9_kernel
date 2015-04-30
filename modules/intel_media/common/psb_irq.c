@@ -333,11 +333,9 @@ static void mid_vblank_handler(struct drm_device *dev, uint32_t pipe)
 	drm_handle_vblank(dev, pipe);
 
 	if (is_cmd_mode_panel(dev)) {
-pr_info("mid vblank cmd mode\n");
 		if (!mipi_te_hdmi_vsync_check(dev, pipe))
 			return;
 	} else {
-pr_info("mid vblank vsync check\n");
 		if (!mipi_hdmi_vsync_check(dev, pipe))
 			return;
 	}
@@ -348,7 +346,6 @@ pr_info("mid vblank vsync check\n");
 	mutex_lock(&dev_priv->vsync_lock);
 	if (pipe == 0 && !dev_priv->vsync_enabled &&
 			 ++dev_priv->vblank_disable_cnt > 10) {
-pr_info("mid vblank DISABLE vblank\n");
 		psb_disable_vblank(dev, 0);
 	}
 	mutex_unlock(&dev_priv->vsync_lock);
@@ -657,7 +654,6 @@ irqreturn_t psb_irq_handler(DRM_IRQ_ARGS)
 #ifdef CONFIG_MDFD_GL3
 	uint32_t gl3_int = 0;
 #endif
-pr_info("psb_irq_handler\n");
 	/*	PSB_DEBUG_ENTRY("\n"); */
 
 	spin_lock_irqsave(&dev_priv->irqmask_lock, irq_flags);

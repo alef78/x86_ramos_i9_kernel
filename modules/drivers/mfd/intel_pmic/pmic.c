@@ -22,6 +22,7 @@
 #include <linux/workqueue.h>
 #include <linux/mfd/intel_mid_pmic.h>
 #include <linux/acpi.h>
+#include <linux/slab.h>
 #include <asm/intel_vlv2.h>
 #include <linux/version.h>
 #include "./pmic.h"

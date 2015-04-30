@@ -146,12 +146,13 @@ static int mdfld_dsi_ltl089cl02_power_on(struct mdfld_dsi_config *dsi_config)
 {
 	struct mdfld_dsi_pkg_sender *sender =
 		mdfld_dsi_get_pkg_sender(dsi_config);
-	mdfld_dsi_send_dpi_spk_pkg_lp(sender, 2);
+	int ret=mdfld_dsi_send_dpi_spk_pkg_lp(sender, 2);
+	
 	msleep(0x64);
         gpio_direction_output(0x67,1);
 	msleep(5);
 	
-	return 0;
+	return ret;
 }
 
 static int mdfld_dsi_ltl089cl02_power_off(struct mdfld_dsi_config *dsi_config)

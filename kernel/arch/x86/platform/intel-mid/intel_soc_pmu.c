@@ -1961,11 +1961,14 @@ mid_pmu_probe(struct pci_dev *dev, const struct pci_device_id *pci_id)
 								 && !enable_s3)
 		__pm_stay_awake(mid_pmu_cxt->pmu_wake_lock);
 #endif
-#ifdef CONFIG_XEN
+//#ifdef CONFIG_XEN
 	/* Force gfx subsystem to be powered up */
+	pmu_nc_set_power_state(dc_islands, OSPM_ISLAND_DOWN, OSPM_REG_TYPE);
+	pmu_nc_set_power_state(gfx_islands, OSPM_ISLAND_DOWN, APM_REG_TYPE);
 	pmu_nc_set_power_state(dc_islands, OSPM_ISLAND_UP, OSPM_REG_TYPE);
 	pmu_nc_set_power_state(gfx_islands, OSPM_ISLAND_UP, APM_REG_TYPE);
-#endif
+	//pmu_nc_set_power_state(48, OSPM_ISLAND_DOWN, OSPM_REG_TYPE);
+//#endif
 	return 0;
 
 out_err3:

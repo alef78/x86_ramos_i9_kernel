@@ -8,9 +8,8 @@ There are some issues with hardware reinitialization, that required patches to k
 Some of this work can be useful on other x86 Intel Mid tablets.
 
 Current status:
-kernel loads, boots to Android. usb, touchscreen,mmc, power management works ok. adb works.
+kernel loads, boots to Android. usb, touchscreen, video, mmc, power management works ok. adb works.
 known problems / todo list:
-1) partially distorted screen (some problem with vblank/vsync in video driver)
-2) sound initiatization takes about 12 seconds during kernel boot (but sound works after that)
-3) not tested bt/wifi yet, because of (1)
-4) bma250 (accelerometer) and camera drivers are not there yet.
+1) sound initiatization takes about 12 seconds during kernel boot (but sound works after that)
+2) no bt/wifi drivers yet.
+3) bma250 (accelerometer) and camera drivers are not there yet.

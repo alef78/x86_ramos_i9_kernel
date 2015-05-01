@@ -507,11 +507,15 @@ static void mdfld_adjust_display_fifo(struct drm_device *dev)
 				REG_WRITE(DSPFW2, 0x5F2F0F0F);
 				REG_WRITE(DSPFW4, 0x07071010);
 			} else {
+			// from ramos binary
 				/* setting for panel bigger than 1080p */
-				REG_WRITE(DSPARB, 0x0005F8D4);
-				REG_WRITE(DSPFW1, 0x0F0F1010);
+				//REG_WRITE(DSPARB, 0x0005F8D4);
+				REG_WRITE(DSPARB, 0x0005E480);
+				//REG_WRITE(DSPFW1, 0x0F0F1010);
+				REG_WRITE(DSPFW1, 0x0F0F103F);
 				REG_WRITE(DSPFW2, 0x5F2F0F0F);
-				REG_WRITE(DSPFW4, 0x07071010);
+				//REG_WRITE(DSPFW4, 0x07071010);
+				REG_WRITE(DSPFW4, 0x0707101F);
 			}
 		} else {
 				/* setting for panel bigger than 1080p */

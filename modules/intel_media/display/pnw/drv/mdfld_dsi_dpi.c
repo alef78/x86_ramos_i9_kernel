@@ -38,8 +38,8 @@
 int entry_mode=0;
 
 
-#define BKL_EN_WKAD 1
-#define PANEL_RESET_WKAD 1
+#define BKL_EN_WKAD 0
+#define PANEL_RESET_WKAD 0
 
 #ifdef PANEL_RESET_WKAD
 static int reset_panel = 1;

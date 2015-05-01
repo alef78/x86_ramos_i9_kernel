@@ -661,7 +661,7 @@ static int __init sfi_parse_devs(struct sfi_table_header *table)
 				pr_info("APIC entry not found for: name=%s, irq=%d, ioapic=%d\n",
 					pentry->name, irq, ioapic);
 		}
-		pr_info("pentry->name222:%s\n", pentry->name);
+		//pr_info("pentry->name222:%s\n", pentry->name);
 
 		if (!strncmp(pentry->name, "ov5693", 6))
 			strcpy(pentry->name, "no_use");	

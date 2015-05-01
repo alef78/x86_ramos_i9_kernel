@@ -1703,7 +1703,6 @@ void psb_modeset_init(struct drm_device *dev)
 	int i;
 
 	PSB_DEBUG_ENTRY("\n");
-pr_info("psb_modeset_init\n");
 
 	/* Init mm functions */
 	mode_dev->bo_from_handle = psb_bo_from_handle;

@@ -224,6 +224,7 @@ static int mdfld_dsi_ltl089cl02_set_brightness(struct mdfld_dsi_config *dsi_conf
 {
         if (level < 0) level=0;
         if (level > 100) level=100;
+	pr_info("AAAAA level = %d\n", level);
 	level *= 60;
 	level /= 100;
 	intel_scu_ipc_iowrite8(0x67, level);//todo

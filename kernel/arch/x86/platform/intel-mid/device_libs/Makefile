@@ -131,3 +131,4 @@ obj-$(subst m,y,$(CONFIG_SCU_LOGGING)) += platform_scu_log.o
 # Display Control Device
 obj-y += platform_display.o
 obj-y += platform_ft5x0x_ts.o
+obj-y += platform_bma250.o

@@ -88,6 +88,7 @@
 #include "device_libs/platform_apds990x.h"
 #include "device_libs/platform_a1026.h"
 #include "device_libs/platform_ft5x0x_ts.h"
+#include "device_libs/platform_bma250.h"
 
 /* SW devices */
 #include "device_libs/platform_panel.h"
@@ -314,6 +315,9 @@ struct devs_id __initconst device_ids[] = {
 	{"audience_es305", SFI_DEV_TYPE_I2C, 0, &audience_platform_data,
 						NULL},
 	{"wm8994", SFI_DEV_TYPE_I2C, 0, &wm8994_platform_data, NULL},
+
+	{"bma250", SFI_DEV_TYPE_I2C, 0, &bma250_platform_data, NULL},
+
 
 	/* IPC devices */
 	{"pmic_charger", SFI_DEV_TYPE_IPC, 1, &no_platform_data, NULL},

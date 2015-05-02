@@ -1,0 +1,12 @@
+#
+# inv-bma250 accelerometer input device
+#
+
+config INV_BMA250
+    tristate "Invensense Bosch BMA250 accelerometer input device driver"
+    depends on I2C && SYSFS && INPUT
+    default n
+    help
+      This driver supports the Bosch BMA250 accelerometer.
+      This driver can be built as a module. The module will be called
+      inv-bma250.

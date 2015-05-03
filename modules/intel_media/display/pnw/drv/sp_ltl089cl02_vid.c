@@ -225,8 +225,18 @@ static int mdfld_dsi_ltl089cl02_set_brightness(struct mdfld_dsi_config *dsi_conf
         if (level < 0) level=0;
         if (level > 100) level=100;
 	pr_info("AAAAA level = %d\n", level);
+	//level *= 60;
+	//level /= 100;
+	// android restricts  minimum to 23%
+	// but lesser levels are usable
+	// so here goes a hack
+	if (level < 23)
+        	level /=2;
+	else
+		level -=11;
 	level *= 60;
-	level /= 100;
+	level /= 89;
+	
 	intel_scu_ipc_iowrite8(0x67, level);//todo
 	return 0;
 }

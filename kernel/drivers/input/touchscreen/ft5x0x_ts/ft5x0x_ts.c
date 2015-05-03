@@ -407,7 +407,7 @@ pr_info("ft5x0x_ts_probe reset ok\n");
 	reg_addr = FT5X0X_REG_FW_VER;
 	
 	err=ft5x0x_i2c_read(client, &reg_addr, 1, &reg_value, 1);
-	if (err) {
+	if (err < 0) {
 		printk(KERN_WARNING "Adding ft5x0x driver failed "
 			"(errno = %d)\n", err);
 	}		
@@ -518,7 +518,6 @@ pr_info("ft5x0x_ts_probe reset ok\n");
 			     0, ft5x0x_ts->x_max, 0, 0);
 	input_set_abs_params(input_dev, ABS_MT_POSITION_Y,
 			     0, ft5x0x_ts->y_max, 0, 0);
-
 	err = input_register_device(input_dev);
 	if (err) {
 		dev_err(&client->dev,

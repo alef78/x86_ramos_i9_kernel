@@ -3,7 +3,7 @@
 #
 
 #obj-$(CONFIG_BCM4330) += bcm4330/
-obj-$(CONFIG_BCMDHD)   += bcmdhd/
+obj-$(CONFIG_BCMDHD)   += bcm4335/
 #obj-$(CONFIG_BROADCOM_WIFI)   += bcmdhd/
 obj-$(CONFIG_IPW2100) += ipw2x00/
 obj-$(CONFIG_IPW2200) += ipw2x00/

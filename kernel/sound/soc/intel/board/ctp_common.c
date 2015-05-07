@@ -85,6 +85,8 @@ static struct snd_soc_jack_gpio hs_gpio[] = {
 		.name = "cs-hsdet-gpio",
 		.report = SND_JACK_HEADSET,
 		.jack_status_check = ctp_soc_jack_gpio_detect,
+		.invert = true,
+		.irq_flags = IRQF_TRIGGER_FALLING,
 	},
 	[CTP_BTN_GPIO] = {
 		.name = "cs-hsbutton-gpio",

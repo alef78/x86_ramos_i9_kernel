@@ -27,11 +27,11 @@
 #include <media/videobuf-vmalloc.h>
 #include <linux/delay.h>
 
-#ifdef CSS20
+#ifdef CONFIG_VIDEO_ATOMISP_CSS20
 #include "ia_css.h"
-#else /* CSS20 */
+#else /* CONFIG_VIDEO_ATOMISP_CSS20 */
 #include <sh_css.h>
-#endif /* CSS20 */
+#endif /* CONFIG_VIDEO_ATOMISP_CSS20 */
 
 #include "atomisp_cmd.h"
 #include "atomisp_common.h"

@@ -35,7 +35,7 @@ void hrt_isp_css_mm_init(void)
 	init_done = 1;
 }
 
-int hrt_isp_css_mm_set(ia_css_ptr virt_addr, int c, size_t bytes)
+int hrt_isp_css_mm_set(void *virt_addr, int c, size_t bytes)
 {
 	if (virt_addr)
 		return hmm_set(virt_addr, c, bytes);
@@ -43,21 +43,21 @@ int hrt_isp_css_mm_set(ia_css_ptr virt_addr, int c, size_t bytes)
 	return -EINVAL;
 }
 
-int hrt_isp_css_mm_load(ia_css_ptr virt_addr, void *data, size_t bytes)
+int hrt_isp_css_mm_load(void *virt_addr, void *data, size_t bytes)
 {
-	if (virt_addr && data)
+	if (virt_addr)
 		return hmm_load(virt_addr, data, bytes);
 	return -EINVAL;
 }
 
-int hrt_isp_css_mm_store(ia_css_ptr virt_addr, const void *data, size_t bytes)
+int hrt_isp_css_mm_store(void *virt_addr, const void *data, size_t bytes)
 {
-	if (virt_addr && data)
+	if (virt_addr)
 		return hmm_store(virt_addr, data, bytes);
 	return -EINVAL;
 }
 
-void hrt_isp_css_mm_free(ia_css_ptr virt_addr)
+void hrt_isp_css_mm_free(void *virt_addr)
 {
 	if (virt_addr)
 		hmm_free(virt_addr);
@@ -71,11 +71,10 @@ void hrt_isp_css_mm_clear(void)
 	}
 }
 
-static void *my_userptr;
-static unsigned my_num_pages;
+static unsigned int my_userptr, my_num_pages;
 static enum hrt_userptr_type my_usr_type;
 
-void hrt_isp_css_mm_set_user_ptr(void *userptr,
+void hrt_isp_css_mm_set_user_ptr(unsigned int userptr,
 				 unsigned int num_pages,
 				 enum hrt_userptr_type type)
 {
@@ -84,7 +83,7 @@ void hrt_isp_css_mm_set_user_ptr(void *userptr,
 	my_usr_type = type;
 }
 
-static ia_css_ptr __hrt_isp_css_mm_alloc(size_t bytes, void *userptr,
+static void *__hrt_isp_css_mm_alloc(size_t bytes, unsigned int userptr,
 				    unsigned int num_pages,
 				    enum hrt_userptr_type type,
 				    bool cached)
@@ -93,13 +92,13 @@ static ia_css_ptr __hrt_isp_css_mm_alloc(size_t bytes, void *userptr,
 		hrt_isp_css_mm_init();
 #ifdef CONFIG_ION
 	if (type == HRT_USR_ION)
-		return hmm_alloc(bytes, HMM_BO_ION, 0,
+		return (void *)hmm_alloc(bytes, HMM_BO_ION, 0,
 					 userptr, cached);
 
 #endif
 	if (type == HRT_USR_PTR) {
-		if (userptr == NULL)
-			return hmm_alloc(bytes, HMM_BO_PRIVATE, 0,
+		if (userptr == 0)
+			return (void *)hmm_alloc(bytes, HMM_BO_PRIVATE, 0,
 						 0, cached);
 		else {
 			if (num_pages < ((__page_align(bytes)) >> PAGE_SHIFT))
@@ -112,22 +111,22 @@ static ia_css_ptr __hrt_isp_css_mm_alloc(size_t bytes, void *userptr,
 					 "user space memory size is"
 					 " large than the expected size..\n");
 
-			return hmm_alloc(bytes, HMM_BO_USER, 0,
+			return (void *)hmm_alloc(bytes, HMM_BO_USER, 0,
 						 userptr, cached);
 		}
 	} else {
 		dev_err(atomisp_dev, "user ptr type is incorrect.\n");
-		return 0;
+		return NULL;
 	}
 }
 
-ia_css_ptr hrt_isp_css_mm_alloc(size_t bytes)
+void *hrt_isp_css_mm_alloc(size_t bytes)
 {
 	return __hrt_isp_css_mm_alloc(bytes, my_userptr,
 				      my_num_pages, my_usr_type, false);
 }
 
-ia_css_ptr hrt_isp_css_mm_alloc_user_ptr(size_t bytes, void *userptr,
+void *hrt_isp_css_mm_alloc_user_ptr(size_t bytes, unsigned int userptr,
 				    unsigned int num_pages,
 				    enum hrt_userptr_type type,
 				    bool cached)
@@ -136,13 +135,13 @@ ia_css_ptr hrt_isp_css_mm_alloc_user_ptr(size_t bytes, void *userptr,
 				      type, cached);
 }
 
-ia_css_ptr hrt_isp_css_mm_alloc_cached(size_t bytes)
+void *hrt_isp_css_mm_alloc_cached(size_t bytes)
 {
 	if (!init_done)
 		hrt_isp_css_mm_init();
 
-	if (my_userptr == NULL)
-		return hmm_alloc(bytes, HMM_BO_PRIVATE, 0, 0,
+	if (my_userptr == 0)
+		return (void *)hmm_alloc(bytes, HMM_BO_PRIVATE, 0, 0,
 						HMM_CACHED);
 	else {
 		if (my_num_pages < ((__page_align(bytes)) >> PAGE_SHIFT))
@@ -154,40 +153,40 @@ ia_css_ptr hrt_isp_css_mm_alloc_cached(size_t bytes)
 					"user space memory size is"
 					" large than the expected size..\n");
 
-		return hmm_alloc(bytes, HMM_BO_USER, 0,
+		return (void *)hmm_alloc(bytes, HMM_BO_USER, 0,
 						my_userptr, HMM_CACHED);
 	}
 }
 
-ia_css_ptr hrt_isp_css_mm_calloc(size_t bytes)
+void *hrt_isp_css_mm_calloc(size_t bytes)
 {
-	ia_css_ptr ptr = hrt_isp_css_mm_alloc(bytes);
+	void *ptr = hrt_isp_css_mm_alloc(bytes);
 	if (!ptr)
 		hmm_set(ptr, 0, bytes);
 	return ptr;
 }
 
-ia_css_ptr hrt_isp_css_mm_calloc_cached(size_t bytes)
+void *hrt_isp_css_mm_calloc_cached(size_t bytes)
 {
-	ia_css_ptr ptr = hrt_isp_css_mm_alloc_cached(bytes);
+	void *ptr = hrt_isp_css_mm_alloc_cached(bytes);
 	if (!ptr)
 		hmm_set(ptr, 0, bytes);
 	return ptr;
 }
 
-phys_addr_t hrt_isp_css_virt_to_phys(ia_css_ptr virt_addr)
+void *hrt_isp_css_virt_to_phys(void *virt_addr)
 {
-	return hmm_virt_to_phys(virt_addr);
+	return (void *)(u32)hmm_virt_to_phys(virt_addr);
 }
 
-ia_css_ptr hrt_isp_css_mm_alloc_contiguous(size_t bytes)
+void *hrt_isp_css_mm_alloc_contiguous(size_t bytes)
 {
 	BUG_ON(false);
-	return 0;
+	return NULL;
 }
-ia_css_ptr hrt_isp_css_mm_calloc_contiguous(size_t bytes)
+void *hrt_isp_css_mm_calloc_contiguous(size_t bytes)
 {
 	BUG_ON(false);
-	return 0;
+	return NULL;
 }
 

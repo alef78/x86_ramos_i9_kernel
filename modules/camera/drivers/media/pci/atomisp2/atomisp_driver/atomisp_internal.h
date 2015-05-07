@@ -29,17 +29,15 @@
 #include <linux/pm_qos.h>
 #include <linux/idr.h>
 
-#include <asm/intel-mid.h>
-
 #include <media/media-device.h>
 #include <media/v4l2-subdev.h>
 
-#ifdef CSS20
+#ifdef CONFIG_VIDEO_ATOMISP_CSS20
 #include "ia_css_types.h"
 #include "sh_css_legacy.h"
-#else /* CSS20 */
+#else /* CONFIG_VIDEO_ATOMISP_CSS20 */
 #include "sh_css_types.h"
-#endif /* CSS20 */
+#endif /* CONFIG_VIDEO_ATOMISP_CSS20 */
 
 #include "atomisp_csi2.h"
 #include "atomisp_file.h"
@@ -50,25 +48,14 @@
 #include "gp_device.h"
 #include "irq.h"
 
-#define IS_MOFD (INTEL_MID_BOARD(1, PHONE, MOFD) || \
-	INTEL_MID_BOARD(1, TABLET, MOFD))
-#define IS_BYT (INTEL_MID_BOARD(1, PHONE, BYT) || \
-	INTEL_MID_BOARD(1, TABLET, BYT))
-#define IS_MFLD (INTEL_MID_BOARD(1, PHONE, MFLD) || \
-        INTEL_MID_BOARD(1, TABLET, MFLD))
-
 #define MAX_STREAM_NUM	2
 
 #define ATOMISP_PCI_DEVICE_SOC_MASK	0xfff8
 /* MRFLD with 0x1178: ISP freq can burst to 457MHz */
 #define ATOMISP_PCI_DEVICE_SOC_MRFLD	0x1178
 /* MRFLD with 0x1179: max ISP freq limited to 400MHz */
-#define ATOMISP_PCI_DEVICE_SOC_MRFLD_1179	0x1179
-/* MRFLD with 0x117a: max ISP freq is 400MHz and max freq at Vmin is 200MHz */
-#define ATOMISP_PCI_DEVICE_SOC_MRFLD_117A	0x117a
+#define ATOMISP_PCI_DEVICE_SOC_MRFLD_FREQ_LIMITED	0x1179
 #define ATOMISP_PCI_DEVICE_SOC_BYT	0x0f38
-#define ATOMISP_PCI_DEVICE_SOC_ANN	0x1478
-#define ATOMISP_PCI_DEVICE_SOC_CHT	0x22b8
 
 #define ATOMISP_PCI_REV_MRFLD_A0_MAX	0
 #define ATOMISP_PCI_REV_BYT_A0_MAX	4
@@ -110,7 +97,6 @@
 #define ATOMISP_ISP_TIMEOUT_DURATION		(2 * HZ)
 #define ATOMISP_ISP_FILE_TIMEOUT_DURATION	(60 * HZ)
 #define ATOMISP_ISP_MAX_TIMEOUT_COUNT	2
-#define ATOMISP_CSS_STOP_TIMEOUT_US	200000
 
 #define ATOMISP_CSS_Q_DEPTH	3
 #define ATOMISP_CSS_EVENTS_MAX  16
@@ -148,8 +134,14 @@ struct atomisp_input_subdev {
 	 * which stream, in ISP multiple stream mode
 	 */
 	struct atomisp_sub_device *asd;
+};
 
-	const struct atomisp_camera_caps *camera_caps;
+struct atomisp_freq_scaling_rule {
+	unsigned int width;
+	unsigned int height;
+	unsigned short fps;
+	unsigned int isp_freq;
+	unsigned int run_mode;
 };
 
 enum atomisp_dfs_mode {
@@ -207,7 +199,7 @@ struct atomisp_acc_fw {
 };
 
 struct atomisp_map {
-	ia_css_ptr ptr;
+	hrt_vaddress ptr;
 	size_t length;
 	struct list_head list;
 	/* FIXME: should keep book which maps are currently used
@@ -293,14 +285,18 @@ struct atomisp_device {
 	struct timer_list wdt;
 	atomic_t wdt_count;
 	unsigned int wdt_duration;	/* in jiffies */
-	atomic_t fast_reset;
 
 	spinlock_t lock; /* Just for streaming below */
 
 	bool need_gfx_throttle;
 
-	unsigned int mipi_frame_size;
-	const struct atomisp_dfs_config *dfs;
+	/* delayed memory allocation for css */
+	struct completion init_done;
+	struct workqueue_struct *delayed_init_workq;
+	unsigned int delayed_init;
+	struct work_struct delayed_init_work;
+
+	unsigned int latest_preview_exp_id; /* CSS ZSL raw buffer id */
 };
 
 #define v4l2_dev_to_atomisp_device(dev) \

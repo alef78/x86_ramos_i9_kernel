@@ -32,31 +32,34 @@
  * pointer from atomisp_get_io_virt_addr
  */
 #define _hrt_master_port_store_8(a, d) \
-	(*((s8 __force *)atomisp_get_io_virt_addr(a)) = (d))
+	(*((s8 __force *)atomisp_get_io_virt_addr((unsigned int)(a)))\
+	= (d))
 
 #define _hrt_master_port_store_16(a, d) \
-	(*((s16 __force *)atomisp_get_io_virt_addr(a)) = (d))
+	(*((s16 __force *)atomisp_get_io_virt_addr((unsigned int)(a)))\
+	= (d))
 
 #define _hrt_master_port_store_32(a, d) \
-	(*((s32 __force *)atomisp_get_io_virt_addr(a)) = (d))
+	(*((s32 __force *)atomisp_get_io_virt_addr((unsigned int)(a)))\
+	= (d))
 
 #define _hrt_master_port_load_8(a) \
-	(*(s8 __force *)atomisp_get_io_virt_addr(a))
+	(*(s8 __force *)atomisp_get_io_virt_addr((unsigned int)(a)))
 
 #define _hrt_master_port_load_16(a) \
-	(*(s16 __force *)atomisp_get_io_virt_addr(a))
+	(*(s16 __force *)atomisp_get_io_virt_addr((unsigned int)(a)))
 
 #define _hrt_master_port_load_32(a) \
-	(*(s32 __force *)atomisp_get_io_virt_addr(a))
+	(*(s32 __force *)atomisp_get_io_virt_addr((unsigned int)(a)))
 
 #define _hrt_master_port_uload_8(a) \
-	(*(u8 __force *)atomisp_get_io_virt_addr(a))
+	(*(u8 __force *)atomisp_get_io_virt_addr((unsigned int)(a)))
 
 #define _hrt_master_port_uload_16(a) \
-	(*(u16 __force *)atomisp_get_io_virt_addr(a))
+	(*(u16 __force *)atomisp_get_io_virt_addr((unsigned int)(a)))
 
 #define _hrt_master_port_uload_32(a) \
-	(*(u32 __force *)atomisp_get_io_virt_addr(a))
+	(*(u32 __force *)atomisp_get_io_virt_addr((unsigned int)(a)))
 
 #define _hrt_master_port_store_8_volatile(a, d)  _hrt_master_port_store_8(a, d)
 #define _hrt_master_port_store_16_volatile(a, d) _hrt_master_port_store_16(a, d)
@@ -75,33 +78,33 @@ static inline void hrt_sleep(void)
 	udelay(1);
 }
 
-static inline uint32_t _hrt_mem_store(uint32_t to, const void *from, size_t n)
+static inline void *_hrt_mem_store(void *to, const void *from, size_t n)
 {
 	unsigned i;
-	uint32_t _to = to;
+	unsigned int _to = (unsigned int)to;
 	const char *_from = (const char *)from;
 	for (i = 0; i < n; i++, _to++, _from++)
 		_hrt_master_port_store_8(_to, *_from);
-	return _to;
+	return (void *)_to;
 }
 
-static inline void *_hrt_mem_load(uint32_t from, void *to, size_t n)
+static inline void *_hrt_mem_load(const void *from, void *to, size_t n)
 {
 	unsigned i;
 	char *_to = (char *)to;
-	uint32_t _from = from;
+	unsigned int _from = (unsigned int)from;
 	for (i = 0; i < n; i++, _to++, _from++)
 		*_to = _hrt_master_port_load_8(_from);
 	return _to;
 }
 
-static inline uint32_t _hrt_mem_set(uint32_t to, int c, size_t n)
+static inline void *_hrt_mem_set(void *to, int c, size_t n)
 {
 	unsigned i;
-	uint32_t _to = to;
+	unsigned int _to = (unsigned int)to;
 	for (i = 0; i < n; i++, _to++)
 		_hrt_master_port_store_8(_to, c);
-	return _to;
+	return (void *)_to;
 }
 
 #endif /* _hive_isp_css_custom_host_hrt_h_ */

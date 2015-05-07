@@ -21,7 +21,7 @@
  */
 
 static sys_address	page_table_base_address = (sys_address)-1;
-const ia_css_ptr	mmgr_NULL = 0;
+const hrt_vaddress	mmgr_NULL = (hrt_vaddress)0;
 
 #ifndef SH_CSS_MEMORY_GUARDING
 /* Choose default in case not defined */
@@ -43,11 +43,11 @@ const ia_css_ptr	mmgr_NULL = 0;
 #define GUARD_SIZE_ALIGNED	DDR_ALIGN(GUARD_SIZE)
 
 #define MAX_ALLOC_ENTRIES (256)
-#define INVALID_VBASE ((ia_css_ptr)-1)
+#define INVALID_VBASE ((hrt_vaddress)-1)
 #define INVALID_SIZE ((unsigned long)-1)
 
 struct alloc_info {
-	ia_css_ptr  vbase;
+	hrt_vaddress  vbase;
 	unsigned long size;
 };
 
@@ -64,7 +64,7 @@ static void alloc_admin_init(void)
 		alloc_admin[i] = alloc_info_invalid;
 }
 
-static struct alloc_info const *alloc_admin_find(ia_css_ptr vaddr)
+static struct alloc_info const *alloc_admin_find(hrt_vaddress vaddr)
 {
 	int i;
 	/**
@@ -83,7 +83,7 @@ static struct alloc_info const *alloc_admin_find(ia_css_ptr vaddr)
 	return &alloc_info_invalid;
 }
 
-static bool mem_guard_valid(ia_css_ptr vaddr, unsigned long size)
+static bool mem_guard_valid(hrt_vaddress vaddr, unsigned long size)
 {
 	unsigned long mem_guard;
 	struct alloc_info const *info;
@@ -100,15 +100,16 @@ static bool mem_guard_valid(ia_css_ptr vaddr, unsigned long size)
 		return false;
 	}
 
-	hrt_isp_css_mm_load((info->vbase - sizeof(mem_guard)),
+	hrt_isp_css_mm_load(
+			(hmm_ptr)HOST_ADDRESS(info->vbase - sizeof(mem_guard)),
 			&mem_guard, sizeof(mem_guard));
 	if (mem_guard != MEM_GUARD_START) {
 		assert(false);
 		return false;
 	}
 
-	hrt_isp_css_mm_load((info->vbase + info->size),
-				&mem_guard, sizeof(mem_guard));
+	hrt_isp_css_mm_load((hmm_ptr)HOST_ADDRESS(info->vbase + info->size),
+						&mem_guard, sizeof(mem_guard));
 	if (mem_guard != MEM_GUARD_END) {
 		assert(false);
 		return false;
@@ -118,7 +119,7 @@ static bool mem_guard_valid(ia_css_ptr vaddr, unsigned long size)
 
 }
 
-static void alloc_admin_add(ia_css_ptr vbase, unsigned long size)
+static void alloc_admin_add(hrt_vaddress vbase, unsigned long size)
 {
 	int i;
 	unsigned long mem_guard;
@@ -126,12 +127,12 @@ static void alloc_admin_add(ia_css_ptr vbase, unsigned long size)
 	assert(alloc_admin_find(vbase)->vbase == INVALID_VBASE);
 
 	mem_guard = MEM_GUARD_START;
-	hrt_isp_css_mm_store((vbase - sizeof(mem_guard)),
-				&mem_guard, sizeof(mem_guard));
+	hrt_isp_css_mm_store((hmm_ptr)HOST_ADDRESS(vbase - sizeof(mem_guard)),
+						&mem_guard, sizeof(mem_guard));
 
 	mem_guard = MEM_GUARD_END;
-	hrt_isp_css_mm_store((vbase + size),
-				&mem_guard, sizeof(mem_guard));
+	hrt_isp_css_mm_store((hmm_ptr)HOST_ADDRESS(vbase + size),
+						&mem_guard, sizeof(mem_guard));
 
 	for (i = 0; i < MAX_ALLOC_ENTRIES; i++) {
 		if (alloc_admin[i].vbase == INVALID_VBASE) {
@@ -143,7 +144,7 @@ static void alloc_admin_add(ia_css_ptr vbase, unsigned long size)
 	assert(false);
 }
 
-static void alloc_admin_remove(ia_css_ptr vbase)
+static void alloc_admin_remove(hrt_vaddress vbase)
 {
 	int i;
 	assert(mem_guard_valid(vbase, 0));
@@ -196,28 +197,28 @@ assert(0);
 return 0;
 }
 
-ia_css_ptr mmgr_malloc(
+hrt_vaddress mmgr_malloc(
 	const size_t			size)
 {
 return mmgr_alloc_attr(size, MMGR_ATTRIBUTE_CACHED);
 }
 
-ia_css_ptr mmgr_calloc(
+hrt_vaddress mmgr_calloc(
 	const size_t			N,
 	const size_t			size)
 {
 return mmgr_alloc_attr(N * size, MMGR_ATTRIBUTE_CLEARED|MMGR_ATTRIBUTE_CACHED);
 }
 
-ia_css_ptr mmgr_realloc(
-	ia_css_ptr			vaddr,
+hrt_vaddress mmgr_realloc(
+	hrt_vaddress			vaddr,
 	const size_t			size)
 {
 return mmgr_realloc_attr(vaddr, size, MMGR_ATTRIBUTE_DEFAULT);
 }
 
 void mmgr_free(
-	ia_css_ptr			vaddr)
+	hrt_vaddress			vaddr)
 {
 /* "free()" should accept NULL, "hrt_isp_css_mm_free()" may not */
 	if (vaddr != mmgr_NULL) {
@@ -226,16 +227,16 @@ void mmgr_free(
 		/* Reconstruct the "original" address used with the alloc */
 		vaddr -= GUARD_SIZE_ALIGNED;
 #endif
-		hrt_isp_css_mm_free(vaddr);
+		hrt_isp_css_mm_free((hmm_ptr)HOST_ADDRESS(vaddr));
 	}
 return;
 }
 
-ia_css_ptr mmgr_alloc_attr(
+hrt_vaddress mmgr_alloc_attr(
 	const size_t			size,
 	const uint16_t			attribute)
 {
-	ia_css_ptr	ptr;
+	hmm_ptr	ptr;
 	size_t	extra_space = 0;
 	size_t	aligned_size = size;
 
@@ -294,14 +295,14 @@ assert((attribute & MMGR_ATTRIBUTE_UNUSED) == 0);
 #if SH_CSS_MEMORY_GUARDING
 	/* ptr is the user pointer, so we need to skip the "begin" guard */
 	ptr += GUARD_SIZE_ALIGNED;
-	alloc_admin_add(ptr, aligned_size);
+	alloc_admin_add(HOST_ADDRESS(ptr), aligned_size);
 #endif
 
-	return ptr;
+	return HOST_ADDRESS(ptr);
 }
 
-ia_css_ptr mmgr_realloc_attr(
-	ia_css_ptr			vaddr,
+hrt_vaddress mmgr_realloc_attr(
+	hrt_vaddress			vaddr,
 	const size_t			size,
 	const uint16_t			attribute)
 {
@@ -316,55 +317,56 @@ assert(0);
 return mmgr_NULL;
 }
 
-ia_css_ptr mmgr_mmap(const void *ptr, const size_t size, uint16_t attribute,
+hrt_vaddress mmgr_mmap(const void *ptr, const size_t size, uint16_t attribute,
 		void *context)
 {
 	struct hrt_userbuffer_attr *userbuffer_attr = context;
-	return hrt_isp_css_mm_alloc_user_ptr(size, (void *)ptr,
-					userbuffer_attr->pgnr,
-					userbuffer_attr->type,
-					attribute & HRT_BUF_FLAG_CACHED);
+	return (hrt_vaddress)hrt_isp_css_mm_alloc_user_ptr(
+			size, (unsigned int)ptr,
+			userbuffer_attr->pgnr,
+			userbuffer_attr->type,
+			attribute & HRT_BUF_FLAG_CACHED);
 }
 
 void mmgr_clear(
-	ia_css_ptr			vaddr,
+	hrt_vaddress			vaddr,
 	const size_t			size)
 {
 	mmgr_set(vaddr, (uint8_t)0, size);
 }
 
 void mmgr_set(
-	ia_css_ptr			vaddr,
+	hrt_vaddress			vaddr,
 	const uint8_t			data,
 	const size_t			size)
 {
 #if SH_CSS_MEMORY_GUARDING
 	assert(mem_guard_valid(vaddr, size));
 #endif
-	hrt_isp_css_mm_set(vaddr, (int)data, size);
+	hrt_isp_css_mm_set((hmm_ptr)HOST_ADDRESS(vaddr), (int)data, size);
 return;
 }
 
 void mmgr_load(
-	const ia_css_ptr		vaddr,
+	const hrt_vaddress		vaddr,
 	void				*data,
 	const size_t			size)
 {
 #if SH_CSS_MEMORY_GUARDING
 	assert(mem_guard_valid(vaddr, size));
 #endif
-	hrt_isp_css_mm_load(vaddr, data, size);
+	hrt_isp_css_mm_load((hmm_ptr)HOST_ADDRESS(vaddr), data, size);
 return;
 }
 
 void mmgr_store(
-	const ia_css_ptr		vaddr,
+	const hrt_vaddress		vaddr,
 	const void				*data,
 	const size_t			size)
 {
 #if SH_CSS_MEMORY_GUARDING
 	assert(mem_guard_valid(vaddr, size));
 #endif
-	hrt_isp_css_mm_store(vaddr, data, size);
+	hrt_isp_css_mm_store((hmm_ptr)HOST_ADDRESS(vaddr), data, size);
 return;
 }

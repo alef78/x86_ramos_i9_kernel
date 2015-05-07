@@ -24,11 +24,11 @@
 #ifndef	__ATOMISP_IOCTL_H__
 #define	__ATOMISP_IOCTL_H__
 
-#ifdef CSS20
+#ifdef CONFIG_VIDEO_ATOMISP_CSS20
 #include "ia_css.h"
-#else /* CSS20 */
+#else /* CONFIG_VIDEO_ATOMISP_CSS20 */
 #include <sh_css.h>
-#endif /* CSS20 */
+#endif /* CONFIG_VIDEO_ATOMISP_CSS20 */
 
 struct atomisp_device;
 struct atomisp_video_pipe;
@@ -62,7 +62,4 @@ extern const struct v4l2_ioctl_ops atomisp_file_ioctl_ops;
 
 unsigned int atomisp_streaming_count(struct atomisp_device *isp);
 
-/* compat_ioctl for 32bit userland app and 64bit kernel */
-long atomisp_compat_ioctl32(struct file *file,
-			    unsigned int cmd, unsigned long arg);
 #endif /* __ATOMISP_IOCTL_H__ */

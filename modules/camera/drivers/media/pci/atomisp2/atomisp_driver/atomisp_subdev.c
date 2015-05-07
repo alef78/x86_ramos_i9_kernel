@@ -43,12 +43,12 @@ const struct atomisp_in_fmt_conv atomisp_in_fmt_conv[] = {
 	{ V4L2_MBUS_FMT_SGBRG10_1X10, 10, 10, CSS_FORMAT_RAW_10, CSS_BAYER_ORDER_GBRG },
 	{ V4L2_MBUS_FMT_SGRBG10_1X10, 10, 10, CSS_FORMAT_RAW_10, CSS_BAYER_ORDER_GRBG },
 	{ V4L2_MBUS_FMT_SRGGB10_1X10, 10, 10, CSS_FORMAT_RAW_10, CSS_BAYER_ORDER_RGGB },
-#ifndef CSS20
+#ifndef CONFIG_VIDEO_ATOMISP_CSS20
 	{ V4L2_MBUS_FMT_SBGGR10_DPCM8_1X8, 10, 8, CSS_FORMAT_RAW_8, CSS_BAYER_ORDER_BGGR },
 	{ V4L2_MBUS_FMT_SGBRG10_DPCM8_1X8, 10, 8, CSS_FORMAT_RAW_8, CSS_BAYER_ORDER_GBRG },
 	{ V4L2_MBUS_FMT_SGRBG10_DPCM8_1X8, 10, 8, CSS_FORMAT_RAW_8, CSS_BAYER_ORDER_GRBG },
 	{ V4L2_MBUS_FMT_SRGGB10_DPCM8_1X8, 10, 8, CSS_FORMAT_RAW_8, CSS_BAYER_ORDER_RGGB },
-#endif /* CSS20 */
+#endif /* CONFIG_VIDEO_ATOMISP_CSS20 */
 	{ V4L2_MBUS_FMT_SBGGR12_1X12, 12, 12, CSS_FORMAT_RAW_12, CSS_BAYER_ORDER_BGGR },
 	{ V4L2_MBUS_FMT_SGBRG12_1X12, 12, 12, CSS_FORMAT_RAW_12, CSS_BAYER_ORDER_GBRG },
 	{ V4L2_MBUS_FMT_SGRBG12_1X12, 12, 12, CSS_FORMAT_RAW_12, CSS_BAYER_ORDER_GRBG },
@@ -314,8 +314,7 @@ static int isp_subdev_get_selection(struct v4l2_subdev *sd,
 static char *atomisp_pad_str[] = { "ATOMISP_SUBDEV_PAD_SINK",
 				   "ATOMISP_SUBDEV_PAD_SOURCE_CAPTURE",
 				   "ATOMISP_SUBDEV_PAD_SOURCE_VF",
-				   "ATOMISP_SUBDEV_PAD_SOURCE_PREVIEW",
-				   "ATOMISP_SUBDEV_PAD_SOURCE_VIDEO"};
+				   "ATOMISP_SUBDEV_PAD_SOURCE_PREVIEW" };
 
 int atomisp_subdev_set_selection(struct v4l2_subdev *sd,
 				 struct v4l2_subdev_fh *fh, uint32_t which,
@@ -325,15 +324,11 @@ int atomisp_subdev_set_selection(struct v4l2_subdev *sd,
 	struct atomisp_sub_device *isp_sd = v4l2_get_subdevdata(sd);
 	struct atomisp_device *isp = isp_sd->isp;
 	struct v4l2_mbus_framefmt *ffmt[ATOMISP_SUBDEV_PADS_NUM];
-	uint16_t vdev_pad = atomisp_subdev_source_pad(fh->vfh.vdev);
 	struct v4l2_rect *crop[ATOMISP_SUBDEV_PADS_NUM],
 		*comp[ATOMISP_SUBDEV_PADS_NUM];
-	enum atomisp_input_stream_id stream_id;
 	unsigned int i;
 	unsigned int padding_w = pad_w;
 	unsigned int padding_h = pad_h;
-
-	stream_id = atomisp_source_pad_to_stream_id(isp_sd, vdev_pad);
 
 	isp_get_fmt_rect(sd, fh, which, ffmt, crop, comp);
 
@@ -358,7 +353,8 @@ int atomisp_subdev_set_selection(struct v4l2_subdev *sd,
 
 		/* Workaround for BYT 1080p perfectshot since the maxinum resolution of
 		 * front camera ov2722 is 1932x1092 and cannot use pad_w > 12*/
-		if (IS_BYT && crop[pad]->height == 1092) {
+		if (intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_VALLEYVIEW2
+			&& crop[pad]->height == 1092) {
 			padding_w = 12;
 			padding_h = 12;
 		}
@@ -373,8 +369,7 @@ int atomisp_subdev_set_selection(struct v4l2_subdev *sd,
 			isp_sd->params.video_dis_en = 0;
 
 		if (isp_sd->params.video_dis_en &&
-		    isp_sd->run_mode->val == ATOMISP_RUN_MODE_VIDEO &&
-		    !isp_sd->continuous_mode->val) {
+		    isp_sd->run_mode->val == ATOMISP_RUN_MODE_VIDEO) {
 			/* This resolution contains 20 % of DVS slack
 			 * (of the desired captured image before
 			 * scaling, or 1 / 6 of what we get from the
@@ -391,7 +386,7 @@ int atomisp_subdev_set_selection(struct v4l2_subdev *sd,
 
 		if (!(flags & V4L2_SEL_FLAG_KEEP_CONFIG)) {
 			for (i = ATOMISP_SUBDEV_PAD_SOURCE_CAPTURE;
-			     i < ATOMISP_SUBDEV_PADS_NUM; i++) {
+			     i <= ATOMISP_SUBDEV_PAD_SOURCE_PREVIEW; i++) {
 				struct v4l2_rect tmp = *crop[pad];
 
 				atomisp_subdev_set_selection(
@@ -409,26 +404,17 @@ int atomisp_subdev_set_selection(struct v4l2_subdev *sd,
 					  ATOM_ISP_STEP_WIDTH);
 			dvs_h = rounddown(crop[pad]->height / 5,
 					  ATOM_ISP_STEP_HEIGHT);
-#ifdef CSS20
-		} else if (!isp_sd->params.video_dis_en &&
-			   isp_sd->run_mode->val == ATOMISP_RUN_MODE_VIDEO) {
-			/*
-			 * For CSS2.0, digital zoom needs to set dvs envelope to 12
-			 * when dvs is disabled.
-			 */
-			dvs_w = dvs_h = 12;
-#endif
-		} else
+		} else {
 			dvs_w = dvs_h = 0;
+		}
 
 		atomisp_css_video_set_dis_envelope(isp_sd, dvs_w, dvs_h);
-		atomisp_css_input_set_effective_resolution(isp_sd, stream_id,
+		atomisp_css_input_set_effective_resolution(isp_sd,
 					crop[pad]->width, crop[pad]->height);
 
 		break;
 	}
-	case ATOMISP_SUBDEV_PAD_SOURCE_CAPTURE:
-	case ATOMISP_SUBDEV_PAD_SOURCE_VIDEO: {
+	case ATOMISP_SUBDEV_PAD_SOURCE_CAPTURE: {
 		/* Only compose target is supported on source pads. */
 
 		if (isp_sd->vfpp->val == ATOMISP_VFPP_DISABLE_LOWLAT) {
@@ -523,15 +509,11 @@ void atomisp_subdev_set_ffmt(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh,
 	struct atomisp_device *isp = isp_sd->isp;
 	struct v4l2_mbus_framefmt *__ffmt =
 		atomisp_subdev_get_ffmt(sd, fh, which, pad);
-	uint16_t vdev_pad = atomisp_subdev_source_pad(fh->vfh.vdev);
-	enum atomisp_input_stream_id stream_id;
 
 	dev_dbg(isp->dev, "ffmt: pad %s w %d h %d code 0x%8.8x which %s\n",
 		atomisp_pad_str[pad], ffmt->width, ffmt->height, ffmt->code,
 		which == V4L2_SUBDEV_FORMAT_TRY ? "V4L2_SUBDEV_FORMAT_TRY"
 		: "V4L2_SUBDEV_FORMAT_ACTIVE");
-
-	stream_id = atomisp_source_pad_to_stream_id(isp_sd, vdev_pad);
 
 	switch (pad) {
 	case ATOMISP_SUBDEV_PAD_SINK: {
@@ -551,15 +533,12 @@ void atomisp_subdev_set_ffmt(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh,
 				     V4L2_SEL_TGT_CROP, 0);
 
 		if (which == V4L2_SUBDEV_FORMAT_ACTIVE) {
-			atomisp_css_input_set_resolution(isp_sd,
-				stream_id, ffmt);
+			atomisp_css_input_set_resolution(isp_sd, ffmt);
 			atomisp_css_input_set_binning_factor(isp_sd,
-				stream_id,
 				atomisp_get_sensor_bin_factor(isp_sd));
-			atomisp_css_input_set_bayer_order(isp_sd, stream_id,
+			atomisp_css_input_set_bayer_order(isp_sd,
 							  fc->bayer_order);
-			atomisp_css_input_set_format(isp_sd, stream_id,
-						fc->in_sh_fmt);
+			atomisp_css_input_set_format(isp_sd, fc->in_sh_fmt);
 		}
 
 		break;
@@ -567,7 +546,6 @@ void atomisp_subdev_set_ffmt(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh,
 	case ATOMISP_SUBDEV_PAD_SOURCE_CAPTURE:
 	case ATOMISP_SUBDEV_PAD_SOURCE_PREVIEW:
 	case ATOMISP_SUBDEV_PAD_SOURCE_VF:
-	case ATOMISP_SUBDEV_PAD_SOURCE_VIDEO:
 		__ffmt->code = ffmt->code;
 		break;
 	}
@@ -702,10 +680,6 @@ static int isp_subdev_link_setup(struct media_entity *entity,
 		/* always write to memory */
 		break;
 
-	case ATOMISP_SUBDEV_PAD_SOURCE_VIDEO | MEDIA_ENT_T_DEVNODE:
-		/* always write to memory */
-		break;
-
 	default:
 		return -EINVAL;
 	}
@@ -788,7 +762,6 @@ static const struct v4l2_ctrl_config ctrl_fmt_auto = {
 	.type = V4L2_CTRL_TYPE_BOOLEAN,
 	.min = 0,
 	.max = 1,
-	.step = 1,
 	.def = 1,
 };
 
@@ -841,7 +814,6 @@ static const struct v4l2_ctrl_config ctrl_continuous_mode = {
 	.name = "Continuous mode",
 	.min = 0,
 	.max = 1,
-	.step = 1,
 	.def = 0,
 };
 
@@ -887,7 +859,6 @@ static const struct v4l2_ctrl_config ctrl_continuous_viewfinder = {
 	.name = "Continuous viewfinder",
 	.min = 0,
 	.max = 1,
-	.step = 1,
 	.def = 0,
 };
 
@@ -926,7 +897,6 @@ static int isp_subdev_init_entities(struct atomisp_sub_device *asd)
 	pads[ATOMISP_SUBDEV_PAD_SOURCE_PREVIEW].flags = MEDIA_PAD_FL_SOURCE;
 	pads[ATOMISP_SUBDEV_PAD_SOURCE_VF].flags = MEDIA_PAD_FL_SOURCE;
 	pads[ATOMISP_SUBDEV_PAD_SOURCE_CAPTURE].flags = MEDIA_PAD_FL_SOURCE;
-	pads[ATOMISP_SUBDEV_PAD_SOURCE_VIDEO].flags = MEDIA_PAD_FL_SOURCE;
 
 	asd->fmt[ATOMISP_SUBDEV_PAD_SINK].fmt.code =
 		V4L2_MBUS_FMT_SBGGR10_1X10;
@@ -935,8 +905,6 @@ static int isp_subdev_init_entities(struct atomisp_sub_device *asd)
 	asd->fmt[ATOMISP_SUBDEV_PAD_SOURCE_VF].fmt.code =
 		V4L2_MBUS_FMT_SBGGR10_1X10;
 	asd->fmt[ATOMISP_SUBDEV_PAD_SOURCE_CAPTURE].fmt.code =
-		V4L2_MBUS_FMT_SBGGR10_1X10;
-	asd->fmt[ATOMISP_SUBDEV_PAD_SOURCE_VIDEO].fmt.code =
 		V4L2_MBUS_FMT_SBGGR10_1X10;
 
 	me->ops = &isp_subdev_media_ops;
@@ -957,9 +925,6 @@ static int isp_subdev_init_entities(struct atomisp_sub_device *asd)
 	atomisp_init_subdev_pipe(asd, &asd->video_out_capture,
 			V4L2_BUF_TYPE_VIDEO_CAPTURE);
 
-	atomisp_init_subdev_pipe(asd, &asd->video_out_video_capture,
-			V4L2_BUF_TYPE_VIDEO_CAPTURE);
-
 	ret = atomisp_video_init(&asd->video_in, "MEMORY");
 	if (ret < 0)
 		return ret;
@@ -973,10 +938,6 @@ static int isp_subdev_init_entities(struct atomisp_sub_device *asd)
 		return ret;
 
 	ret = atomisp_video_init(&asd->video_out_preview, "PREVIEW");
-	if (ret < 0)
-		return ret;
-
-	ret = atomisp_video_init(&asd->video_out_video_capture, "VIDEO");
 	if (ret < 0)
 		return ret;
 
@@ -1001,12 +962,6 @@ static int isp_subdev_init_entities(struct atomisp_sub_device *asd)
 	ret = media_entity_create_link(&asd->subdev.entity,
 		ATOMISP_SUBDEV_PAD_SOURCE_CAPTURE,
 		&asd->video_out_capture.vdev.entity, 0, 0);
-	if (ret < 0)
-		return ret;
-
-	ret = media_entity_create_link(&asd->subdev.entity,
-		ATOMISP_SUBDEV_PAD_SOURCE_VIDEO,
-		&asd->video_out_video_capture.vdev.entity, 0, 0);
 	if (ret < 0)
 		return ret;
 
@@ -1051,7 +1006,6 @@ void atomisp_subdev_unregister_entities(struct atomisp_sub_device *asd)
 	atomisp_video_unregister(&asd->video_out_preview);
 	atomisp_video_unregister(&asd->video_out_vf);
 	atomisp_video_unregister(&asd->video_out_capture);
-	atomisp_video_unregister(&asd->video_out_video_capture);
 }
 
 int atomisp_subdev_register_entities(struct atomisp_sub_device *asd,
@@ -1073,10 +1027,6 @@ int atomisp_subdev_register_entities(struct atomisp_sub_device *asd,
 		goto error;
 
 	ret = atomisp_video_register(&asd->video_out_preview, vdev);
-	if (ret < 0)
-		goto error;
-
-	ret = atomisp_video_register(&asd->video_out_video_capture, vdev);
 	if (ret < 0)
 		goto error;
 
@@ -1115,7 +1065,7 @@ int atomisp_subdev_init(struct atomisp_device *isp)
 	 * CSS2.0 running ISP2400 support
 	 * multiple streams
 	 */
-	isp->num_of_streams = isp->media_dev.driver_version >=
+	isp->num_of_streams = isp->media_dev.driver_version ==
 	    ATOMISP_CSS_VERSION_20 ? 2 : 1;
 	isp->asd = devm_kzalloc(isp->dev, sizeof(struct atomisp_sub_device) *
 			       isp->num_of_streams, GFP_KERNEL);

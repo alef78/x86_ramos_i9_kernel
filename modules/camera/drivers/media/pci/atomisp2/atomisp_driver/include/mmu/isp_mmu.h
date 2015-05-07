@@ -36,7 +36,7 @@
  */
 #define	ISP_PAGE_OFFSET		12
 #define	ISP_PAGE_SIZE		(1U << ISP_PAGE_OFFSET)
-#define	ISP_PAGE_MASK		(~(phys_addr_t)(ISP_PAGE_SIZE - 1))
+#define	ISP_PAGE_MASK		(~(ISP_PAGE_SIZE - 1))
 
 #define	ISP_L1PT_OFFSET		22
 #define	ISP_L1PT_MASK		(~((1U << ISP_L1PT_OFFSET) - 1))
@@ -115,7 +115,7 @@ struct isp_mmu_client {
 struct isp_mmu {
 	struct isp_mmu_client *driver;
 	unsigned int l1_pte;
-	phys_addr_t base_address;
+	unsigned int base_address;
 
 	struct mutex pt_mutex;
 #ifdef USE_KMEM_CACHE
@@ -141,10 +141,6 @@ int isp_mmu_init(struct isp_mmu *mmu, struct isp_mmu_client *driver);
  * cleanup all mmu related things.
  */
 void isp_mmu_exit(struct isp_mmu *mmu);
-/*
- * just cleanup empty L2 page tables.
- */
-void isp_mmu_clean_l2(struct isp_mmu *mmu);
 
 /*
  * setup/remove address mapping for pgnr continous physical pages

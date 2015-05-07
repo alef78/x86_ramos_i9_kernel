@@ -29,12 +29,6 @@
 #include "psb_drv.h"
 #include <asm/intel_scu_pmic.h>
 
-/**
- * set GPIO_MIPI_PANEL_RESET to 57 for CTP VV platform
- * set GPIO_MIPI_PANEL_RESET to 117 (core_gpio[21] for Hydra)
- */
-#define GPIO_MIPI_PANEL_RESET 57
-
 struct drm_display_mode *ltl089cl02_vid_get_config_mode(void);
 static void ltl089cl02_vid_get_panel_info(int pipe, struct panel_info *pi);
 static int mdfld_dsi_ltl089cl02_panel_reset(struct mdfld_dsi_config *dsi_config);
@@ -178,7 +172,6 @@ static int mdfld_dsi_ltl089cl02_detect(struct mdfld_dsi_config *dsi_config)
 	int pipe = dsi_config->pipe;
 
 	PSB_DEBUG_ENTRY("\n");
-pr_info("ltl detect\n");
 	if (pipe == 0) {
 		/*
 		 * FIXME: WA to detect the panel connection status, and need to
@@ -195,7 +188,6 @@ pr_info("ltl detect\n");
 		if ((device_ready_val & DSI_DEVICE_READY) &&
 		    (dpll_val & DPLL_VCO_ENABLE)) {
 			dsi_config->dsi_hw_context.panel_on = true;
-pr_info("ltl detect en vblank\n");
                 psb_enable_vblank(dev, 0);
 		} //else {
 			dsi_config->dsi_hw_context.panel_on = false;
@@ -230,12 +222,12 @@ static int mdfld_dsi_ltl089cl02_set_brightness(struct mdfld_dsi_config *dsi_conf
 	// android restricts  minimum to 23%
 	// but lesser levels are usable
 	// so here goes a hack
-	if (level < 23)
-        	level /=2;
+	if (level < 22)
+        	level = level * 2 / 3;
 	else
-		level -=11;
+		level -=7;
 	level *= 60;
-	level /= 89;
+	level /= 93;
 	
 	intel_scu_ipc_iowrite8(0x67, level);//todo
 	return 0;

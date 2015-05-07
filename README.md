@@ -4,12 +4,12 @@
 Ramos I9 tablet (and its rebrands, like Flipkart XT901) has good hardware, but locked bootloader.
 Additionally, Ramos is violating GPL by not releasing its kernel sources.
 Loading custom kernel is still possible via kexec.
-There are some issues with hardware reinitialization, that required patches to kexec and the kernel to be loaded.
+There were some issues with hardware reinitialization, that required patches to kexec and the kernel to be loaded.
 Some of this work can be useful on other x86 Intel Mid tablets.
 
 Current status:
-kernel loads, boots to Android. usb, touchscreen, video, mmc, power management,wifi works ok. adb works.
+kernel loads, boots to Android. usb, touchscreen, video, mmc, power management,wifi,bluetooth works ok. adb works.
 known problems / todo list:
-1) no bluetooth drivers yet.
-2) bma250e (accelerometer) detected but not working
-3) camera drivers are not there yet.
+1) bma250e (accelerometer) detected but not working
+2) camera drivers are not there yet.
+3) headset and charging indication seems wrong

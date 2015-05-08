@@ -46,7 +46,7 @@
 #define BMA250_CHIP_ID			3
 #define BMA250E_CHIP_ID			0xf9
 #define BMA250_RANGE_SET		0
-#define BMA250_BW_SET			4
+#define BMA250_BW_SET			0xA /*was: 4 */
 
 
 /*
@@ -332,10 +332,10 @@ static int bma250_smbus_read_byte(struct i2c_client *client,
 }
 
 static int bma250_smbus_write_byte(struct i2c_client *client,
-		unsigned char reg_addr, unsigned char *data)
+		unsigned char reg_addr, unsigned char data)
 {
 	s32 dummy;
-	dummy = i2c_smbus_write_byte_data(client, reg_addr, *data);
+	dummy = i2c_smbus_write_byte_data(client, reg_addr, data);
 	if (dummy < 0)
 		return -1;
 	return 0;
@@ -386,7 +386,7 @@ static int bma250_set_mode(struct i2c_client *client, unsigned char Mode)
 			}
 
 			comres += bma250_smbus_write_byte(client,
-					BMA250_EN_LOW_POWER__REG, &data1);
+					BMA250_EN_LOW_POWER__REG, data1);
 		} else{
 			comres = -1;
 		}
@@ -432,7 +432,7 @@ static int bma250_set_range(struct i2c_client *client, unsigned char Range)
 					BMA250_RANGE_SEL, Range);
 
 			comres += bma250_smbus_write_byte(client,
-					BMA250_RANGE_SEL_REG, &data1);
+					BMA250_RANGE_SEL_REG, data1);
 		} else {
 			comres = -EINVAL;
 		}
@@ -479,7 +479,7 @@ static int bma250_set_bandwidth(struct i2c_client *client, unsigned char BW)
 					BMA250_BANDWIDTH__REG, &data);
 			data = BMA250_SET_BITSLICE(data, BMA250_BANDWIDTH, BW);
 			comres += bma250_smbus_write_byte(client,
-					BMA250_BANDWIDTH__REG, &data);
+					BMA250_BANDWIDTH__REG, data);
 		} else {
 			comres = -EINVAL;
 		}
@@ -516,7 +516,7 @@ static int bma250_soft_reset(struct i2c_client *client)
 	int comres = 0;
 	unsigned char data = BMA250_EN_SOFT_RESET_VALUE ;
 
-	comres = bma250_smbus_write_byte(client, BMA250_EN_SOFT_RESET__REG, &data);
+	comres = bma250_smbus_write_byte(client, BMA250_EN_SOFT_RESET__REG, data);
 
 	return comres;
 }
@@ -569,7 +569,7 @@ static int bma250_set_ee_w(struct i2c_client *client, unsigned char eew)
 			BMA250_UNLOCK_EE_WRITE_SETTING__REG, &data);
 	data = BMA250_SET_BITSLICE(data, BMA250_UNLOCK_EE_WRITE_SETTING, eew);
 	comres = bma250_smbus_write_byte(client,
-			BMA250_UNLOCK_EE_WRITE_SETTING__REG, &data);
+			BMA250_UNLOCK_EE_WRITE_SETTING__REG, data);
 	return comres;
 }
 
@@ -586,7 +586,7 @@ static int bma250_set_ee_prog_trig(struct i2c_client *client)
 	data = BMA250_SET_BITSLICE(data,
 				BMA250_START_EE_WRITE_SETTING, eeprog);
 	comres = bma250_smbus_write_byte(client,
-			BMA250_START_EE_WRITE_SETTING__REG, &data);
+			BMA250_START_EE_WRITE_SETTING__REG, data);
 	return comres;
 }
 
@@ -785,6 +785,7 @@ static void bma250_set_enable(struct device *dev, int enable)
 	mutex_lock(&bma250->enable_mutex);
 	if (enable) {
 		if (pre_enable == 0) {
+	                bma250_set_mode(bma250->bma250_client, 0);
 			schedule_delayed_work(&bma250->work,
 					msecs_to_jiffies(
 						atomic_read(&bma250->delay)));
@@ -793,6 +794,7 @@ static void bma250_set_enable(struct device *dev, int enable)
 
 	} else {
 		if (pre_enable == 1) {
+	                bma250_set_mode(bma250->bma250_client, 2);
 			cancel_delayed_work_sync(&bma250->work);
 			atomic_set(&bma250->enable, 0);
 		}
@@ -839,7 +841,7 @@ static int bma250_set_selftest_st(struct i2c_client *client,
 	data = BMA250_SET_BITSLICE(data,
 			BMA250_EN_SELF_TEST, selftest);
 	comres = bma250_smbus_write_byte(client,
-			BMA250_EN_SELF_TEST__REG, &data);
+			BMA250_EN_SELF_TEST__REG, data);
 
 	return comres;
 }
@@ -853,7 +855,7 @@ static int bma250_set_selftest_stn(struct i2c_client *client, unsigned char stn)
 			BMA250_NEG_SELF_TEST__REG, &data);
 	data = BMA250_SET_BITSLICE(data, BMA250_NEG_SELF_TEST, stn);
 	comres = bma250_smbus_write_byte(client,
-			BMA250_NEG_SELF_TEST__REG, &data);
+			BMA250_NEG_SELF_TEST__REG, data);
 
 	return comres;
 }
@@ -970,7 +972,7 @@ static ssize_t bma250_selftest_store(struct device *dev,
 	if (bma250_set_range(bma250->bma250_client, BMA250_RANGE_2G) < 0)
 		return -EINVAL;
 
-	bma250_smbus_write_byte(bma250->bma250_client, 0x32, &clear_value);
+	bma250_smbus_write_byte(bma250->bma250_client, 0x32, clear_value);
 	/* 1 for x-axis*/
 	bma250_set_selftest_st(bma250->bma250_client, 1);
 	/* positive direction*/
@@ -1060,7 +1062,7 @@ static int bma250_set_offset_target_x(struct i2c_client *client,
 	data = BMA250_SET_BITSLICE(data,
 			BMA250_COMP_TARGET_OFFSET_X, offsettarget);
 	comres = bma250_smbus_write_byte(client,
-			BMA250_COMP_TARGET_OFFSET_X__REG, &data);
+			BMA250_COMP_TARGET_OFFSET_X__REG, data);
 
 	return comres;
 }
@@ -1090,7 +1092,7 @@ static int bma250_set_offset_target_y(struct i2c_client *client,
 	data = BMA250_SET_BITSLICE(data,
 			BMA250_COMP_TARGET_OFFSET_Y, offsettarget);
 	comres = bma250_smbus_write_byte(client,
-			BMA250_COMP_TARGET_OFFSET_Y__REG, &data);
+			BMA250_COMP_TARGET_OFFSET_Y__REG, data);
 
 	return comres;
 }
@@ -1120,7 +1122,7 @@ static int bma250_set_offset_target_z(struct i2c_client *client,
 	data = BMA250_SET_BITSLICE(data,
 			BMA250_COMP_TARGET_OFFSET_Z, offsettarget);
 	comres = bma250_smbus_write_byte(client,
-			BMA250_COMP_TARGET_OFFSET_Z__REG, &data);
+			BMA250_COMP_TARGET_OFFSET_Z__REG, data);
 
 	return comres;
 }
@@ -1148,7 +1150,7 @@ static int bma250_set_offset_filt_x(struct i2c_client *client, unsigned char
 
 	data =  offsetfilt;
 	comres = bma250_smbus_write_byte(client, BMA250_OFFSET_FILT_X_REG,
-						&data);
+						data);
 
 	return comres;
 }
@@ -1175,7 +1177,7 @@ static int bma250_set_offset_filt_y(struct i2c_client *client, unsigned char
 
 	data =  offsetfilt;
 	comres = bma250_smbus_write_byte(client, BMA250_OFFSET_FILT_Y_REG,
-						&data);
+						data);
 
 	return comres;
 }
@@ -1201,7 +1203,7 @@ static int bma250_set_offset_filt_z(struct i2c_client *client, unsigned char
 
 	data =  offsetfilt;
 	comres = bma250_smbus_write_byte(client, BMA250_OFFSET_FILT_Z_REG,
-						&data);
+						data);
 
 	return comres;
 }
@@ -1245,7 +1247,7 @@ static int bma250_set_cal_trigger(struct i2c_client *client,
 	data = BMA250_SET_BITSLICE(data,
 			BMA250_EN_FAST_COMP, caltrigger);
 	comres = bma250_smbus_write_byte(client,
-			BMA250_EN_FAST_COMP__REG, &data);
+			BMA250_EN_FAST_COMP__REG, data);
 
 	return comres;
 }

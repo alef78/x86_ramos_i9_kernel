@@ -103,6 +103,7 @@
 #include "device_libs/platform_lm3554.h"
 #include "device_libs/platform_mt9v113.h"
 #include "device_libs/platform_ov5640.h"
+#include "device_libs/platform_ov5645.h"
 #include "device_libs/platform_imx175.h"
 #include "device_libs/platform_imx135.h"
 #include "device_libs/platform_imx134.h"
@@ -110,6 +111,7 @@
 #include "device_libs/platform_s5k8aay.h"
 #include "device_libs/platform_ov9724.h"
 #include "device_libs/platform_ov2722.h"
+#include "device_libs/platform_ov2675.h"
 #include "device_libs/platform_lm3559.h"
 #include "device_libs/platform_ov8830.h"
 #include "device_libs/platform_ov5693.h"
@@ -295,6 +297,10 @@ struct devs_id __initconst device_ids[] = {
 	{"ov9724", SFI_DEV_TYPE_I2C, 0, &ov9724_platform_data,
 					&intel_register_i2c_camera_device},
 	{"ov2722", SFI_DEV_TYPE_I2C, 0, &ov2722_platform_data,
+					&intel_register_i2c_camera_device},
+	{"ov5645", SFI_DEV_TYPE_I2C, 0, &ov5645_platform_data,
+					&intel_register_i2c_camera_device},
+	{"ov2675", SFI_DEV_TYPE_I2C, 0, &ov2675_platform_data,
 					&intel_register_i2c_camera_device},
 	{"ov5693", SFI_DEV_TYPE_I2C, 0, &ov5693_platform_data,
 					&intel_register_i2c_camera_device},

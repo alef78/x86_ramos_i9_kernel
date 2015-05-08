@@ -127,6 +127,8 @@ struct camera_sensor_platform_data {
 	bool (*low_fps)(void);
 	int (*platform_init)(struct i2c_client *);
 	int (*platform_deinit)(void);
+	// ov5645 camera has Voltage Control Module (vcm) for autofocus
+	int (*vcm_power_ctrl)(struct v4l2_subdev *subdev, int flag);
 	char *(*msr_file_name)(void);
 	struct atomisp_camera_caps *(*get_camera_caps)(void);
 };

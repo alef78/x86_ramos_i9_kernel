@@ -411,6 +411,7 @@ EXPORT_SYMBOL(smb347_is_valid_batid);
 
 static void *get_platform_data(void)
 {
+pr_info("smb347 get_platform_data\n");
 	/* Redridge all */
 	if (INTEL_MID_BOARD(2, TABLET, MFLD, RR, ENG) ||
 		INTEL_MID_BOARD(2, TABLET, MFLD, RR, PRO)) {
@@ -451,6 +452,7 @@ static void *get_platform_data(void)
 			return &byt_t_cr_crb_pdata;
 		}
 	}
+pr_info("smb347 get_platform_data NULL\n");
 	return NULL;
 }
 

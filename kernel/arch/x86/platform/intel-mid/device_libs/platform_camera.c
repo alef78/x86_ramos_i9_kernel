@@ -30,6 +30,9 @@
  *       set this info in the platform data of each sensor
  */
 const struct intel_v4l2_subdev_id v4l2_ids[] = {
+	// ramos i9 cameras. verified by objdump
+	{"ov5645", SOC_CAMERA, ATOMISP_CAMERA_PORT_PRIMARY},
+	{"ov2675", SOC_CAMERA, ATOMISP_CAMERA_PORT_SECONDARY},
 	{"mt9e013", RAW_CAMERA, ATOMISP_CAMERA_PORT_PRIMARY},
 	{"ov8830", RAW_CAMERA, ATOMISP_CAMERA_PORT_PRIMARY},
 	{"imx175", RAW_CAMERA, ATOMISP_CAMERA_PORT_PRIMARY},

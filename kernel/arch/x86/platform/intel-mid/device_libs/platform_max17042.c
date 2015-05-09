@@ -56,21 +56,21 @@ void max17042_i2c_reset_workaround(void)
 {
 /* toggle clock pin of I2C to recover devices from abnormal status.
  * currently, only max17042 on I2C needs such workaround */
-#if defined(CONFIG_BATTERY_INTEL_MDF)
-#define I2C_GPIO_PIN 27
-#elif defined(CONFIG_BOARD_CTP)
+//#if defined(CONFIG_BATTERY_INTEL_MDF)
+//#define I2C_GPIO_PIN 27
+//#elif defined(CONFIG_BOARD_CTP)
 #define I2C_GPIO_PIN 29
-#elif defined(CONFIG_X86_MRFLD)
-#define I2C_GPIO_PIN 21
-#else
-#define I2C_GPIO_PIN 27
-#endif
-#define I2C0_GPIO_PIN_BYT_CR_V2 79
+//#elif defined(CONFIG_X86_MRFLD)
+//#define I2C_GPIO_PIN 21
+//#else
+//#define I2C_GPIO_PIN 27
+//#endif
+//#define I2C0_GPIO_PIN_BYT_CR_V2 79
 
 	int i2c_gpio_pin = I2C_GPIO_PIN;
-	if (INTEL_MID_BOARD(3, TABLET, BYT, BLK, PRO, CRV2) ||
-		INTEL_MID_BOARD(3, TABLET, BYT, BLK, ENG, CRV2))
-		i2c_gpio_pin = I2C0_GPIO_PIN_BYT_CR_V2;
+//	if (INTEL_MID_BOARD(3, TABLET, BYT, BLK, PRO, CRV2) ||
+//		INTEL_MID_BOARD(3, TABLET, BYT, BLK, ENG, CRV2))
+//		i2c_gpio_pin = I2C0_GPIO_PIN_BYT_CR_V2;
 	lnw_gpio_set_alt(i2c_gpio_pin, LNW_GPIO);
 	gpio_direction_output(i2c_gpio_pin, 0);
 	gpio_set_value(i2c_gpio_pin, 1);
@@ -247,6 +247,7 @@ static bool ctp_is_volt_shutdown_enabled(void)
 
 static int ctp_get_vsys_min(void)
 {
+return 3400000;//ok - disasm
 	struct ps_batt_chg_prof batt_profile;
 	int ret;
 	ret = get_batt_prop(&batt_profile);
@@ -378,11 +379,11 @@ static void init_tgain_toff(struct max17042_platform_data *pdata)
 }
 
 static void init_callbacks(struct max17042_platform_data *pdata)
-{
+{/*
 	if (INTEL_MID_BOARD(1, PHONE, MFLD) ||
 		INTEL_MID_BOARD(2, TABLET, MFLD, YKB, ENG) ||
 		INTEL_MID_BOARD(2, TABLET, MFLD, YKB, PRO)) {
-		/* MFLD Phones and Yukka beach Tablet */
+		// MFLD Phones and Yukka beach Tablet 
 		pdata->current_sense_enabled =
 					intel_msic_is_current_sense_enabled;
 		pdata->battery_present =
@@ -405,23 +406,23 @@ static void init_callbacks(struct max17042_platform_data *pdata)
 			INTEL_MID_BOARD(2, TABLET, MFLD, RR, PRO) ||
 			INTEL_MID_BOARD(2, TABLET, MFLD, SLP, ENG) ||
 			INTEL_MID_BOARD(2, TABLET, MFLD, SLP, PRO)) {
-		/* MFLD  Redridge and Salitpa Tablets */
+		// MFLD  Redridge and Salitpa Tablets 
 		pdata->restore_config_data = mfld_fg_restore_config_data;
 		pdata->save_config_data = mfld_fg_save_config_data;
 		pdata->battery_status = smb347_get_charging_status;
 	} else if (INTEL_MID_BOARD(1, PHONE, CLVTP)
 			|| INTEL_MID_BOARD(1, TABLET, CLVT)) {
-		/* CLTP Phones and tablets */
+*/		// CLTP Phones and tablets 
 		pdata->battery_health = bq24192_get_battery_health;
 		pdata->get_vmin_threshold = ctp_get_vsys_min;
 		pdata->reset_chip = true;
 		pdata->battery_pack_temp = ctp_get_battery_temp;
 		pdata->is_volt_shutdown_enabled = ctp_is_volt_shutdown_enabled;
-	} else if (INTEL_MID_BOARD(1, PHONE, MRFL)
+/*	} else if (INTEL_MID_BOARD(1, PHONE, MRFL)
 			|| INTEL_MID_BOARD(1, TABLET, MRFL)
 			|| INTEL_MID_BOARD(1, PHONE, MOFD)
 			|| INTEL_MID_BOARD(1, TABLET, MOFD)) {
-		/* MRFL Phones and tablets*/
+		// MRFL Phones and tablets
 		pdata->battery_health = mrfl_get_bat_health;
 		pdata->battery_pack_temp = pmic_get_battery_pack_temp;
 		pdata->get_vmin_threshold = mrfl_get_vsys_min;
@@ -430,7 +431,7 @@ static void init_callbacks(struct max17042_platform_data *pdata)
 		pdata->get_vmin_threshold = byt_get_vsys_min;
 		pdata->get_vmax_threshold = byt_get_vbatt_max;
 	}
-
+*/
 	pdata->reset_i2c_lines = max17042_i2c_reset_workaround;
 }
 

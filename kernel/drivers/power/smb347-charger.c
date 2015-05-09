@@ -2438,7 +2438,8 @@ static int smb347_probe(struct i2c_client *client,
 		smb->usb.supported_cables = pdata->supported_cables;
 		smb->usb.set_property = smb347_usb_set_property;
 		smb->max_cc = 1800;
-		smb->max_cv = 4350;
+		//smb->max_cv = 4350;
+		smb->max_cv = 4200;
 		ret = power_supply_register(dev, &smb->usb);
 		if (ret < 0)
 			goto psy_reg2_failed;

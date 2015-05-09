@@ -25,6 +25,41 @@
 #define BYT_FFD8_PR1_BATID_LL 0x2D0
 #define BYT_FFD8_PR1_BATID_UL 0x2F0
 
+static struct smb347_charger_platform_data smb347_pdata_rhb0 = {
+	.battery_info	= {
+		.name			= "UP110005",
+		.technology		= POWER_SUPPLY_TECHNOLOGY_LIPO,
+		.voltage_max_design	= 3700000,
+		.voltage_min_design	= 3000000,
+		.charge_full_design	= 6894000,
+	},
+	.use_mains			= true,
+	.use_usb			= true,
+	.is_valid_battery		= true,
+	.enable_control			= SMB347_CHG_ENABLE_SW,//PIN_ACTIVE_LOW,
+	.otg_control			= SMB347_OTG_CONTROL_SW,
+	.irq_gpio			= SMB347_IRQ_GPIO,
+	.char_config_regs		= {
+						/* Reg  Value */
+						0x00, 0xFC,
+						0x01, 0x95,
+						0x02, 0x83,
+						0x03, 0xE3,
+						0x04, 0x3A,
+						0x05, 0x1A,
+						0x06, 0x65,
+						0x07, 0xEF,
+						0x08, 0x09,
+						0x09, 0xDF,
+						0x0A, 0xAB,
+						0x0B, 0x5A,
+						0x0C, 0xC1,
+						0x0D, 0x46,
+						0xFF, 0xFF
+					},
+};
+
+
 /* Redridge DV2.1 */
 static struct smb347_charger_platform_data smb347_rr_pdata = {
 	.battery_info	= {
@@ -105,13 +140,14 @@ static struct smb347_charger_platform_data smb347_ev10_pdata = {
 		.charge_full_design	= 6894000,
 	},
 	.use_mains			= true,
+	.use_usb			= true,
 	.is_valid_battery		= true,
-	.enable_control			= SMB347_CHG_ENABLE_PIN_ACTIVE_LOW,
-	.otg_control			= SMB347_OTG_CONTROL_DISABLED,
+	.enable_control			= SMB347_CHG_ENABLE_SW,//PIN_ACTIVE_LOW,
+	.otg_control			= SMB347_OTG_CONTROL_AUTO,
 	.irq_gpio			= SMB347_IRQ_GPIO,
 	.char_config_regs		= {
-						/* Reg  Value */
-						0x00, 0xAA,
+						// Reg  Value 
+					/*	0x00, 0xAA,
 						0x01, 0x6C,
 						0x02, 0x93,
 						0x03, 0xE5,
@@ -125,7 +161,7 @@ static struct smb347_charger_platform_data smb347_ev10_pdata = {
 						0x0C, 0x8D,
 						0x0D, 0x00,
 						0x0E, 0x20,
-						0x10, 0x7F,
+						0x10, 0x7F,*/
 						0xFF, 0xFF
 					},
 };
@@ -411,6 +447,7 @@ EXPORT_SYMBOL(smb347_is_valid_batid);
 
 static void *get_platform_data(void)
 {
+		return &smb347_pdata_rhb0;
 pr_info("smb347 get_platform_data\n");
 	/* Redridge all */
 	if (INTEL_MID_BOARD(2, TABLET, MFLD, RR, ENG) ||

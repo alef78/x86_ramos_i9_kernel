@@ -25,11 +25,6 @@
 #include "smb347_external_include.h"
 #include "asus_battery.h"
 #include <linux/HWVersion.h>
-//extern int Read_HW_ID(void);
-//extern int Read_PROJ_ID(void);
-//extern int Read_PCB_ID(void);
-
-extern int temp_status_502;
 
 /*
  *  config function
@@ -191,16 +186,13 @@ struct smb347_charger {
 	bool			otg_enabled;       // offset 0x2b4
 	bool			otg_battery_uv;
 	const struct smb347_charger_platform_data	*pdata; // offset 0x2b8
-#if 1
 	struct delayed_work	smb347_statmon_worker;
-#endif
 	/* wake lock to prevent S3 during charging */
 	struct wake_lock wakelock;    // offset 0x308
 	void *adc; // do not know what is it
 };
 
 static struct smb347_charger *smb347_dev;
-static bool ischargerSuspend = false;
 static bool isUSBSuspendNotify = false;
 static int not_ready_flag=1;
 
@@ -210,7 +202,7 @@ static char *smb347_power_supplied_to[] = {
 			"max17047_battery",
 			"max17050_battery",
 };
-#if 1
+
 /* Fast charge current in uA */
 // confirmed by disassembly that ramos uses the same table
 static const unsigned int fcc_tbl[] = {
@@ -265,9 +257,7 @@ static const unsigned int ccc_tbl[] = {
 	900000,
 	1200000,
 };
-#endif
 
-// +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #define EXPORT_CHARGER_OTG
 
 #define DEBUG 1
@@ -376,67 +366,6 @@ struct battery_info_reply batt_info = {
 
 struct wake_lock wakelock_cable, wakelock_cable_t;
 
-/*static int smb347_read_reg(struct i2c_client *client, int reg,
-				u8 *val, int ifDebug)
-{
-	s32 ret;
-	struct smb347_charger *smb347_chg;
-
-	smb347_chg = i2c_get_clientdata(client);
-	ret = i2c_smbus_read_byte_data(smb347_chg->client, reg);
-	if (ret < 0) {
-		dev_err(&smb347_chg->client->dev,
-			"i2c read fail: can't read from Reg%02Xh: %d\n", reg, ret);
-		return ret;
-	} else {
-		*val = ret;
-	}
-	if (ifDebug) CHR_info("Reg%02Xh = " BYTETOBINARYPATTERN "\n", reg, BYTETOBINARY(*val));
-
-	return 0;
-}
-*/
-/*static int smb347_write_reg(struct i2c_client *client, int reg,
-						u8 val)
-{
-	s32 ret;
-	struct smb347_charger *smb347_chg;
-
-	//CHR_info("write " BYTETOBINARYPATTERN " to Reg%02Xh\n", BYTETOBINARY(val), reg);
-	smb347_chg = i2c_get_clientdata(client);
-
-	ret = i2c_smbus_write_byte_data(smb347_chg->client, reg, val);
-	if (ret < 0) {
-		dev_err(&smb347_chg->client->dev,
-			"i2c write fail: can't write %02X to %02X: %d\n",
-			val, reg, ret);
-		return ret;
-	}
-	return 0;
-}*/
-
-/*static int smb347_masked_write(struct i2c_client *client, int reg,
-		u8 mask, u8 val)
-{
-	s32 rc;
-	u8 temp;
-
-	//CHR_info("\n");
-	rc = smb347_read_reg(client, reg, &temp, 0);
-	if (rc) {
-//		CHR_err("smb347_read_reg failed: reg=%03X, rc=%d\n", reg, rc);
-		return rc;
-	}
-	temp &= ~mask;
-	temp |= val & mask;
-	rc = smb347_write_reg(client, reg, temp);
-	if (rc) {
-//		CHR_err("smb347_write failed: reg=%03X, rc=%d\n", reg, rc);
-		return rc;
-	}
-	return 0;
-}
-*/
 static int smb347_read(struct smb347_charger *smb, u8 reg)
 {
 	int ret;
@@ -1592,7 +1521,7 @@ fail:
 	return ret;
 }
 
-static irqreturn_t smb347_inok_interrupt(int irq, void *data)
+static irqreturn_t smb347_interrupt(int irq, void *data)
 {
 	struct smb347_charger *smb = data;
 
@@ -1633,7 +1562,7 @@ static int smb347_inok_gpio_init(struct smb347_charger *smb)
 		goto fail;
 	}
 
-	ret = request_threaded_irq(irq, NULL, smb347_inok_interrupt,
+	ret = request_threaded_irq(irq, NULL, smb347_interrupt,
 					IRQF_TRIGGER_FALLING | IRQF_TRIGGER_RISING | IRQF_ONESHOT,
 					smb->client->name,
 					smb);
@@ -2115,8 +2044,6 @@ static int smb347_remove(struct i2c_client *client)
 {
 	struct smb347_charger *smb = i2c_get_clientdata(client);
 
-//	cable_status_unregister_client(&cable_status_notifier2);
-
 	if (!IS_ERR_OR_NULL(smb->dentry))
 		debugfs_remove(smb->dentry);
 
@@ -2165,19 +2092,10 @@ static int smb347_remove(struct i2c_client *client)
 
 void smb347_shutdown(struct i2c_client *client)
 {
-#if 0
 	struct smb347_charger *smb = i2c_get_clientdata(client);
-#endif
-
 	dev_info(&client->dev, "%s\n", __func__);
 
-        if (batt_info.cable_status == USB_ADAPTER || batt_info.cable_status == USB_PC) {
-             /*ME560CG SOC control JEIAT*/
-             // smb347_control_JEITA(false);
-        }
-
 	/* Disable OTG during shutdown */
-//	otg(0);
 #if 0
 	if (smb)
 		smb347_otg_drive_vbus(smb, false);
@@ -2278,26 +2196,14 @@ static int smb347_runtime_idle(struct device *dev)
 static int smb347_suspend(struct device *dev)
 {
     CHR_info("%s called\n", __func__);
-    if (batt_info.cable_status == USB_ADAPTER || batt_info.cable_status == USB_PC) {
-        /*ME560CG SOC control JEIAT*/
-        //smb347_control_JEITA(false);
-    }
-    ischargerSuspend = true;
     return 0;
 }
 
 static int smb347_resume(struct device *dev)
 {
     CHR_info("%s called\n", __func__);
-    if (batt_info.cable_status == USB_ADAPTER || batt_info.cable_status == USB_PC) {
-        /*ME560CG SOC control JEIAT*/
-        //smb347_control_JEITA(true);
-    }
-    ischargerSuspend = false;
     if (isUSBSuspendNotify) {
        isUSBSuspendNotify = false;
-       //cable_status_notify2( NULL, query_cable_status(), dev);
-       //wake_unlock(&wakelock_cable);
     }
     return 0;
 }

@@ -1,3 +1,4 @@
+obj-y += platform_a500cg_smb347.o
 # IPC Devices
 obj-y += platform_sst_audio.o
 obj-y += platform_clv_regulator.o

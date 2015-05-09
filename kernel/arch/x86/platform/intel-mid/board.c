@@ -125,7 +125,7 @@
 #include "device_libs/platform_max3111.h"
 #include "device_libs/platform_max17042.h"
 #include "device_libs/platform_bq27x00.h"
-#include "device_libs/platform_smb347.h"
+#include "device_libs/platform_a500cg_smb347.h"
 /* HSI devices */
 #include "device_libs/platform_hsi_modem.h"
 #include "device_libs/platform_ffl_modem.h"

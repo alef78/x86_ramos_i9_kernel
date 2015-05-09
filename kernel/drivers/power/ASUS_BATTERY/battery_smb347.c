@@ -346,192 +346,34 @@ static const unsigned int ccc_tbl[] = {
 
 #define CFG_FAST_CHARGE_SMB358_A600CG	BIT(5)|BIT(7)
 
-extern struct battery_info_reply batt_info;
-
-DEFINE_MUTEX(batt_info_mutex);
-
-struct battery_info_reply batt_info = {
-        .drv_status = DRV_NOT_READY,
-        .cable_status = NO_CABLE,
-//			#ifdef CONFIG_ASUS_FACTORY_MODE
-//			        .eng_charging_limit = true,
-//				#endif
-        .thermal_charging_limit = true, //in A500, thermal_charging_limit means thermal protection on or false
-        .cable_source = CABLE_OUT,
-        .gauge_version = 4,
-        .isValidBattID = true,
-};
-
-
-
-struct wake_lock wakelock_cable, wakelock_cable_t;
-
-static int smb347_read(struct smb347_charger *smb, u8 reg)
-{
-	int ret;
-
-	ret = i2c_smbus_read_byte_data(smb->client, reg);
-	if (ret < 0)
-		dev_warn(&smb->client->dev, "failed to read reg 0x%x: %d\n",
-			 reg, ret);
-	return ret;
-}
-
-static int smb347_write(struct smb347_charger *smb, u8 reg, u8 val)
-{
-	int ret;
-
-	ret = i2c_smbus_write_byte_data(smb->client, reg, val);
-	if (ret < 0)
-		dev_warn(&smb->client->dev, "failed to write reg 0x%x: %d\n",
-			 reg, ret);
-
-	return ret;
-}
-
-/*
- * smb347_set_writable - enables/disables writing to non-volatile registers
- * @smb: pointer to smb347 charger instance
- *
- * You can enable/disable writing to the non-volatile configuration
- * registers by calling this function.
- *
- * Returns %0 on success and negative errno in case of failure.
- */
-static int smb347_set_writable(struct smb347_charger *smb, bool writable)
-{
-	int ret;
-
-	ret = smb347_read(smb, CMD_A);
-	if (ret < 0)
-		return ret;
-
-	if (writable)
-		ret |= CMD_A_ALLOW_WRITE;
-	else
-		ret &= ~CMD_A_ALLOW_WRITE;
-
-	return smb347_write(smb, CMD_A, ret);
-}
-
-// +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-#if 1
-/* Convert register value to current using lookup table */
-/*static int hw_to_current(const unsigned int *tbl, size_t size, unsigned int val)
-{
-	if (val >= size)
-		return -EINVAL;
-	return tbl[val];
-}
-*/
-/* Convert current to register value using lookup table */
-static int current_to_hw(const unsigned int *tbl, size_t size, unsigned int val)
-{
-	size_t i;
-
-	for (i = 0; i < size; i++)
-		if (val < tbl[i])
-			break;
-	return i > 0 ? i - 1 : -EINVAL;
-}
-#endif
-
-/**
- * smb347_update_status - updates the charging status
- * @smb: pointer to smb347 charger instance
- *
- * Function checks status of the charging and updates internal state
- * accordingly. Returns %0 if there is no change in status, %1 if the
- * status has changed and negative errno in case of failure.
- */
-static int smb347_update_status(struct smb347_charger *smb)
-{
-	bool usb = false;
-	bool dc = false;
-	int ret;
-
-	ret = smb347_read(smb, IRQSTAT_E);
-	if (ret < 0)
-		return ret;
-
-	/*
-	 * Dc and usb are set depending on whether they are enabled in
-	 * platform data _and_ whether corresponding undervoltage is set.
-	 */
-	if (!smb->otg_enabled) {
-		if (smb->pdata->use_mains)
-			dc = !(ret & IRQSTAT_E_DCIN_UV_STAT);
-		if (smb->pdata->use_usb)
-			usb = !(ret & IRQSTAT_E_USBIN_UV_STAT);
-	}
-
-	mutex_lock(&smb->lock);
-	ret = smb->mains_online != dc || smb->usb_online != usb;
-	smb->mains_online = dc;
-	smb->usb_online = usb;
-	mutex_unlock(&smb->lock);
-
-	return ret;
-}
-
-#if 1
-/**
- * smb347_status_monitor - worker function to monitor status
- * @work: delayed work handler structure
- * Context: Can sleep
- *
- * Monitors status of the charger and updates the charging status.
- * Note: This worker is manily added to notify the user space about
- * capacity, health and status chnages.
- */
-static void smb347_status_monitor(struct work_struct *work)
-{
-	struct smb347_charger *smb = container_of(work,
-			struct smb347_charger, smb347_statmon_worker.work);
-	int ret;
-
-	pm_runtime_get_sync(&smb->client->dev);
-
-	ret = smb347_update_status(smb);
-	if (ret < 0)
-		dev_err(&smb->client->dev, "error in updating smb347 status\n");
-
-	if (smb->pdata->use_mains)
-		power_supply_changed(&smb->mains);
-	if (smb->pdata->use_usb)
-		power_supply_changed(&smb->usb);
-	schedule_delayed_work(&smb->smb347_statmon_worker,
-						STATUS_UPDATE_INTERVAL);
-	pm_runtime_put_sync(&smb->client->dev);
-}
-#endif
-
-#if CANCEL_SOFT_HOT_TEMP_LIMIT
-static int cancel_soft_hot_temp_limit(struct smb347_charger *smb)
-{
-	int ret;
-
-	/* ME371MG EVB/SR1 meet this problem that smb347 stop charging
-		when IC temperature is high up to Soft Hot Limit. But Battery
-		is not full charging. We disable this limitation.
-	*/
-
-	CHR_info("set soft hot temperature limit behavior to No Response\n");
-	ret = smb347_read(smb, CFG_THERM);
-	if (ret < 0)
-		return ret;
-
-	ret &= ~CFG_THERM_SOFT_HOT_COMPENSATION_MASK;
-
-	ret = smb347_write(smb, CFG_THERM, ret);
-	if (ret < 0)
-		return ret;
-
-        return ret;
-}
-#endif
-
 static struct power_supply *fg_psy;
+
+static int smb347_mains_get_property(struct power_supply *psy,
+				     enum power_supply_property prop,
+				     union power_supply_propval *val)
+{
+	struct smb347_charger *smb =
+		container_of(psy, struct smb347_charger, mains);
+	if (prop == POWER_SUPPLY_PROP_ONLINE) {
+		val->intval = smb->mains_online;
+		return 0;
+	}
+	return -EINVAL;
+}
+
+static int smb347_usb_get_property(struct power_supply *psy,
+				   enum power_supply_property prop,
+				   union power_supply_propval *val)
+{
+	struct smb347_charger *smb =
+		container_of(psy, struct smb347_charger, usb);
+	if (prop == POWER_SUPPLY_PROP_ONLINE) {
+		val->intval = smb->usb_online;
+		return 0;
+	}
+	return -EINVAL;
+}
+
 /* check_batt_psy -check for whether power supply type is battery
  * @dev : Power Supply dev structure
  * @data : Power Supply Driver Data
@@ -550,6 +392,57 @@ static int check_batt_psy(struct device *dev, void *data)
 		return 1;
 	}
 	return 0;
+}
+
+/*
+ * smb347_is_online - returns whether input power source is connected
+ * @smb: pointer to smb347 charger instance
+ *
+ * Returns %true if input power source is connected. Note that this is
+ * dependent on what platform has configured for usable power sources. For
+ * example if USB is disabled, this will return %false even if the USB
+ * cable is connected.
+ */
+static bool smb347_is_online(struct smb347_charger *smb)
+{ // verified ok
+	bool ret;
+
+	mutex_lock(&smb->lock);
+	ret = (smb->usb_online || smb->mains_online) && !smb->otg_enabled;
+	mutex_unlock(&smb->lock);
+
+	return ret;
+}
+
+static int smb347_prepare(struct device *dev)
+{
+	struct smb347_charger *smb = dev_get_drvdata(dev);
+
+	if (smb347_is_online(smb))
+		return -EBUSY;
+
+	/*
+	 * disable irq here doesn't mean smb347 interrupt
+	 * can't wake up system. smb347 interrupt is triggered
+	 * by GPIO pin, which is always active.
+	 * When resume callback calls enable_irq, kernel
+	 * would deliver the buffered interrupt (if it has) to
+	 * driver.
+	 */
+	if (smb->client->irq > 0)
+		disable_irq(smb->client->irq);
+
+	cancel_delayed_work_sync(&smb->smb347_statmon_worker);
+
+	dev_info(&smb->client->dev, "smb347 suspend\n");
+
+	return 0;
+}
+
+static int smb347_debugfs_show(struct seq_file *s, void *data);
+static int smb347_debugfs_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, smb347_debugfs_show, inode->i_private);
 }
 
 /*
@@ -590,119 +483,156 @@ static int fg_chip_get_property(enum power_supply_property psp)
 	return ret;
 }
 
-#if 1
-/*
- * smb347_is_online - returns whether input power source is connected
- * @smb: pointer to smb347 charger instance
- *
- * Returns %true if input power source is connected. Note that this is
- * dependent on what platform has configured for usable power sources. For
- * example if USB is disabled, this will return %false even if the USB
- * cable is connected.
- */
-static bool smb347_is_online(struct smb347_charger *smb)
-{ // verified ok
-	bool ret;
+static int smb347_runtime_idle(struct device *dev)
+{
 
-	mutex_lock(&smb->lock);
-	ret = (smb->usb_online || smb->mains_online) && !smb->otg_enabled;
-	mutex_unlock(&smb->lock);
+	dev_info(dev, "%s called\n", __func__);
+	return 0;
+}
 
+static int smb347_runtime_resume(struct device *dev)
+{
+	dev_info(dev, "%s called\n", __func__);
+	return 0;
+}
+
+static int smb347_runtime_suspend(struct device *dev)
+{
+	dev_info(dev, "%s called\n", __func__);
+	return 0;
+}
+
+
+static int smb347_read(struct smb347_charger *smb, u8 reg)
+{
+	int ret;
+
+	ret = i2c_smbus_read_byte_data(smb->client, reg);
+	if (ret < 0)
+		dev_warn(&smb->client->dev, "failed to read reg 0x%x: %d\n",
+			 reg, ret);
 	return ret;
 }
 
 /**
- * smb347_charging_status - returns status of charging
+ * smb347_update_status - updates the charging status
  * @smb: pointer to smb347 charger instance
  *
- * Function returns charging status. %0 means no charging is in progress,
- * %1 means pre-charging, %2 fast-charging and %3 taper-charging.
+ * Function checks status of the charging and updates internal state
+ * accordingly. Returns %0 if there is no change in status, %1 if the
+ * status has changed and negative errno in case of failure.
  */
-static int smb347_charging_status(struct smb347_charger *smb)
+static int smb347_update_status(struct smb347_charger *smb)
 {
+	bool usb = false;
+	bool dc = false;
 	int ret;
 
-	if (!smb347_is_online(smb))
-		return 0;
-
-	ret = smb347_read(smb, STAT_C);
+	ret = smb347_read(smb, IRQSTAT_E);
 	if (ret < 0)
-		return 0;
+		return ret;
 
-	return (ret & STAT_C_CHG_MASK) >> STAT_C_CHG_SHIFT;
-}
-
-static int smb347_charging_set(struct smb347_charger *smb, bool enable)
-{
-	int ret = 0;
-
-	if (smb->pdata->enable_control != SMB347_CHG_ENABLE_SW) {
-		dev_dbg(&smb->client->dev,
-			"charging enable/disable in SW disabled\n");
-		return 0;
+	/*
+	 * Dc and usb are set depending on whether they are enabled in
+	 * platform data _and_ whether corresponding undervoltage is set.
+	 */
+	if (!smb->otg_enabled) {
+		if (smb->pdata->use_mains)
+			dc = !(ret & IRQSTAT_E_DCIN_UV_STAT);
+		if (smb->pdata->use_usb)
+			usb = !(ret & IRQSTAT_E_USBIN_UV_STAT);
 	}
 
 	mutex_lock(&smb->lock);
-	if (smb->charging_enabled != enable) {
-		ret = smb347_read(smb, CMD_A);
-		if (ret < 0)
-			goto out;
-
-		smb->charging_enabled = enable;
-
-		if (enable)
-			ret |= CMD_A_CHG_ENABLED;
-		else
-			ret &= ~CMD_A_CHG_ENABLED;
-
-		ret = smb347_write(smb, CMD_A, ret);
-	}
-out:
+	ret = smb->mains_online != dc || smb->usb_online != usb;
+	smb->mains_online = dc;
+	smb->usb_online = usb;
 	mutex_unlock(&smb->lock);
-	return ret;
-}
-
-static inline int smb347_charging_enable(struct smb347_charger *smb)
-{
-	/* prevent system from entering s3 while charger is connected */
-	if (!wake_lock_active(&smb->wakelock))
-		wake_lock(&smb->wakelock);
-	return smb347_charging_set(smb, true);
-}
-
-static inline int smb347_charging_disable(struct smb347_charger *smb)
-{
-	int ret;
-
-	ret = smb347_charging_set(smb, false);
-	/* release the wake lock when charger is unplugged */
-	if (wake_lock_active(&smb->wakelock))
-		wake_unlock(&smb->wakelock);
 
 	return ret;
 }
 
-static int smb347_update_online(struct smb347_charger *smb)
+static int smb347_debugfs_show(struct seq_file *s, void *data)
 {
+	struct smb347_charger *smb = s->private;
 	int ret;
+	u8 reg;
 
-	/*
-	 * Depending on whether valid power source is connected or not, we
-	 * disable or enable the charging. We do it manually because it
-	 * depends on how the platform has configured the valid inputs.
-	 */
-	if (smb347_is_online(smb)) {
-		ret = smb347_charging_enable(smb);
-		if (ret < 0)
-			dev_err(&smb->client->dev,
-				"failed to enable charging\n");
-	} else {
-		if (ret < 0)
-			dev_err(&smb->client->dev,
-				"failed to disable charging\n");
+	seq_printf(s, "Control registers:\n");
+	seq_printf(s, "==================\n");
+	seq_printf(s, "#Addr\t#Value\n");
+	for (reg = CFG_CHARGE_CURRENT; reg <= CFG_ADDRESS; reg++) {
+		ret = smb347_read(smb, reg);
+		seq_printf(s, "0x%02x:\t" BYTETOBINARYPATTERN "\n", reg, BYTETOBINARY(ret));
+	}
+	seq_printf(s, "\n");
+
+	seq_printf(s, "Command registers:\n");
+	seq_printf(s, "==================\n");
+	seq_printf(s, "#Addr\t#Value\n");
+	ret = smb347_read(smb, CMD_A);
+	seq_printf(s, "0x%02x:\t" BYTETOBINARYPATTERN "\n", CMD_A, BYTETOBINARY(ret));
+	ret = smb347_read(smb, CMD_B);
+	seq_printf(s, "0x%02x:\t" BYTETOBINARYPATTERN "\n", CMD_B, BYTETOBINARY(ret));
+	ret = smb347_read(smb, CMD_C);
+	seq_printf(s, "0x%02x:\t" BYTETOBINARYPATTERN "\n", CMD_C, BYTETOBINARY(ret));
+	seq_printf(s, "\n");
+
+	seq_printf(s, "Interrupt status registers:\n");
+	seq_printf(s, "===========================\n");
+	seq_printf(s, "#Addr\t#Value\n");
+	for (reg = IRQSTAT_A; reg <= IRQSTAT_F; reg++) {
+		ret = smb347_read(smb, reg);
+		seq_printf(s, "0x%02x:\t" BYTETOBINARYPATTERN "\n", reg, BYTETOBINARY(ret));
+	}
+	seq_printf(s, "\n");
+
+	seq_printf(s, "Status registers:\n");
+	seq_printf(s, "=================\n");
+	seq_printf(s, "#Addr\t#Value\n");
+	for (reg = STAT_A; reg <= STAT_E; reg++) {
+		ret = smb347_read(smb, reg);
+		seq_printf(s, "0x%02x:\t" BYTETOBINARYPATTERN "\n", reg, BYTETOBINARY(ret));
 	}
 
+	return 0;
+}
+
+static int smb347_write(struct smb347_charger *smb, u8 reg, u8 val)
+{
+	int ret;
+
+	ret = i2c_smbus_write_byte_data(smb->client, reg, val);
+	if (ret < 0)
+		dev_warn(&smb->client->dev, "failed to write reg 0x%x: %d\n",
+			 reg, ret);
+
 	return ret;
+}
+
+/*
+ * smb347_set_writable - enables/disables writing to non-volatile registers
+ * @smb: pointer to smb347 charger instance
+ *
+ * You can enable/disable writing to the non-volatile configuration
+ * registers by calling this function.
+ *
+ * Returns %0 on success and negative errno in case of failure.
+ */
+static int smb347_set_writable(struct smb347_charger *smb, bool writable)
+{
+	int ret;
+
+	ret = smb347_read(smb, CMD_A);
+	if (ret < 0)
+		return ret;
+
+	if (writable)
+		ret |= CMD_A_ALLOW_WRITE;
+	else
+		ret &= ~CMD_A_ALLOW_WRITE;
+
+	return smb347_write(smb, CMD_A, ret);
 }
 
 static int smb347_otg_set(struct smb347_charger *smb, bool enable)
@@ -772,6 +702,338 @@ static int smb347_otg_set(struct smb347_charger *smb, bool enable)
 
 out:
 	mutex_unlock(&smb->lock);
+	return ret;
+}
+
+int smb347_set_usb_suspend(struct smb347_charger *smb, bool enable)
+{ // TODO
+	return 0;
+}
+
+int smb347_set_usb_charge_mode(struct smb347_charger *smb, bool enable)
+{ // TODO
+	return 0;
+}
+
+void smb347_debugfs_write(void)
+{ // TODO, params??
+}
+
+static int smb347_charging_set(struct smb347_charger *smb, bool enable)
+{
+	int ret = 0;
+
+	if (smb->pdata->enable_control != SMB347_CHG_ENABLE_SW) {
+		dev_dbg(&smb->client->dev,
+			"charging enable/disable in SW disabled\n");
+		return 0;
+	}
+
+	mutex_lock(&smb->lock);
+	if (smb->charging_enabled != enable) {
+		ret = smb347_read(smb, CMD_A);
+		if (ret < 0)
+			goto out;
+
+		smb->charging_enabled = enable;
+
+		if (enable)
+			ret |= CMD_A_CHG_ENABLED;
+		else
+			ret &= ~CMD_A_CHG_ENABLED;
+
+		ret = smb347_write(smb, CMD_A, ret);
+	}
+out:
+	mutex_unlock(&smb->lock);
+	return ret;
+}
+
+static int smb347_charging_status(struct smb347_charger *smb);
+int smb347_get_charging_status(void)
+{
+	int ret, status;
+	int capacity;
+	int current_now;
+
+	if (!smb347_dev)
+		return -EINVAL;
+
+	if (!smb347_is_online(smb347_dev))
+		return POWER_SUPPLY_STATUS_DISCHARGING;
+
+	ret = smb347_read(smb347_dev, STAT_C);
+	if (ret < 0)
+		return ret;
+
+	dev_info(&smb347_dev->client->dev,
+			"Charging Status: STAT_C:0x%x\n", ret);
+
+        capacity = fg_chip_get_property(POWER_SUPPLY_PROP_CAPACITY);
+	if (capacity == -ENODEV || capacity == -EINVAL) {
+		dev_err(&smb347_dev->client->dev,
+			"Can't read level from FG!\n");
+		return POWER_SUPPLY_HEALTH_UNSPEC_FAILURE;
+	}
+
+        current_now = fg_chip_get_property(POWER_SUPPLY_PROP_CURRENT_NOW);
+	if (current_now == -ENODEV || current_now == -EINVAL) {
+		dev_err(&smb347_dev->client->dev,
+			"Can't read curr from FG!\n");
+		return POWER_SUPPLY_HEALTH_UNSPEC_FAILURE;
+	}
+        if (capacity==100)
+		return POWER_SUPPLY_STATUS_FULL;
+
+
+//TODO!! 
+	if ((ret & STAT_C_CHARGER_ERROR) ||
+		(ret & STAT_C_HOLDOFF_STAT)) {
+		/* set to NOT CHARGING upon charger error
+		 * or charging has stopped.
+		 */
+		status = POWER_SUPPLY_STATUS_NOT_CHARGING;
+	} else {
+		if ((ret & STAT_C_CHG_MASK) >> STAT_C_CHG_SHIFT) {
+			/* set to charging if battery is in pre-charge,
+			 * fast charge or taper charging mode.
+			 */
+			status = POWER_SUPPLY_STATUS_CHARGING;
+		} else if (ret & STAT_C_CHG_TERM) {
+			/* set the status to FULL if battery is not in pre
+			 * charge, fast charge or taper charging mode AND
+			 * charging is terminated at least once.
+			 */
+			status = POWER_SUPPLY_STATUS_FULL;
+		} else {
+			/* in this case no charger error or termination
+			 * occured but charging is not in progress!!!
+			 */
+			status = POWER_SUPPLY_STATUS_NOT_CHARGING;
+		}
+	}
+
+	return status;
+}
+EXPORT_SYMBOL_GPL(smb347_get_charging_status);
+
+static int smb347_battery_get_property(struct power_supply *psy,
+				       enum power_supply_property prop,
+				       union power_supply_propval *val)
+{
+	struct smb347_charger *smb =
+			container_of(psy, struct smb347_charger, battery);
+	const struct smb347_charger_platform_data *pdata = smb->pdata;
+	int ret;
+
+	ret = smb347_update_status(smb);
+	if (ret < 0)
+		return ret;
+
+	switch (prop) {
+	case POWER_SUPPLY_PROP_STATUS:
+		ret = smb347_get_charging_status();
+		if (ret < 0)
+			return ret;
+		val->intval = ret;
+		break;
+
+	case POWER_SUPPLY_PROP_CHARGE_TYPE:
+		if (!smb347_is_online(smb))
+			return -ENODATA;
+
+		/*
+		 * We handle trickle and pre-charging the same, and taper
+		 * and none the same.
+		 */
+		switch (smb347_charging_status(smb)) {
+		case 1:
+			val->intval = POWER_SUPPLY_CHARGE_TYPE_TRICKLE;
+			break;
+		case 2:
+			val->intval = POWER_SUPPLY_CHARGE_TYPE_FAST;
+			break;
+		default:
+			val->intval = POWER_SUPPLY_CHARGE_TYPE_NONE;
+			break;
+		}
+		break;
+
+	case POWER_SUPPLY_PROP_TECHNOLOGY:
+		val->intval = pdata->battery_info.technology;
+		break;
+
+	case POWER_SUPPLY_PROP_VOLTAGE_MIN_DESIGN:
+		val->intval = pdata->battery_info.voltage_min_design;
+		break;
+
+	case POWER_SUPPLY_PROP_VOLTAGE_MAX_DESIGN:
+		val->intval = pdata->battery_info.voltage_max_design;
+		break;
+
+	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
+		val->intval = pdata->battery_info.charge_full_design;
+		break;
+
+	case POWER_SUPPLY_PROP_MODEL_NAME:
+		val->strval = pdata->battery_info.name;
+		break;
+
+	default:
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+static enum power_supply_property smb347_usb_properties[] = {
+	POWER_SUPPLY_PROP_ONLINE,
+};
+
+
+#if 1
+
+struct wake_lock wakelock_cable, wakelock_cable_t;
+// +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+#if 1
+/* Convert register value to current using lookup table */
+/*static int hw_to_current(const unsigned int *tbl, size_t size, unsigned int val)
+{
+	if (val >= size)
+		return -EINVAL;
+	return tbl[val];
+}
+*/
+/* Convert current to register value using lookup table */
+static int current_to_hw(const unsigned int *tbl, size_t size, unsigned int val)
+{
+	size_t i;
+
+	for (i = 0; i < size; i++)
+		if (val < tbl[i])
+			break;
+	return i > 0 ? i - 1 : -EINVAL;
+}
+#endif
+
+/**
+ * smb347_status_monitor - worker function to monitor status
+ * @work: delayed work handler structure
+ * Context: Can sleep
+ *
+ * Monitors status of the charger and updates the charging status.
+ * Note: This worker is manily added to notify the user space about
+ * capacity, health and status chnages.
+ */
+static void smb347_status_monitor(struct work_struct *work)
+{
+	struct smb347_charger *smb = container_of(work,
+			struct smb347_charger, smb347_statmon_worker.work);
+	int ret;
+
+	pm_runtime_get_sync(&smb->client->dev);
+
+	ret = smb347_update_status(smb);
+	if (ret < 0)
+		dev_err(&smb->client->dev, "error in updating smb347 status\n");
+
+	if (smb->pdata->use_mains)
+		power_supply_changed(&smb->mains);
+	if (smb->pdata->use_usb)
+		power_supply_changed(&smb->usb);
+	schedule_delayed_work(&smb->smb347_statmon_worker,
+						STATUS_UPDATE_INTERVAL);
+	pm_runtime_put_sync(&smb->client->dev);
+}
+#endif
+
+#if CANCEL_SOFT_HOT_TEMP_LIMIT
+static int cancel_soft_hot_temp_limit(struct smb347_charger *smb)
+{
+	int ret;
+
+	/* ME371MG EVB/SR1 meet this problem that smb347 stop charging
+		when IC temperature is high up to Soft Hot Limit. But Battery
+		is not full charging. We disable this limitation.
+	*/
+
+	CHR_info("set soft hot temperature limit behavior to No Response\n");
+	ret = smb347_read(smb, CFG_THERM);
+	if (ret < 0)
+		return ret;
+
+	ret &= ~CFG_THERM_SOFT_HOT_COMPENSATION_MASK;
+
+	ret = smb347_write(smb, CFG_THERM, ret);
+	if (ret < 0)
+		return ret;
+
+        return ret;
+}
+#endif
+
+#if 1
+/**
+ * smb347_charging_status - returns status of charging
+ * @smb: pointer to smb347 charger instance
+ *
+ * Function returns charging status. %0 means no charging is in progress,
+ * %1 means pre-charging, %2 fast-charging and %3 taper-charging.
+ */
+static int smb347_charging_status(struct smb347_charger *smb)
+{
+	int ret;
+
+	if (!smb347_is_online(smb))
+		return 0;
+
+	ret = smb347_read(smb, STAT_C);
+	if (ret < 0)
+		return 0;
+
+	return (ret & STAT_C_CHG_MASK) >> STAT_C_CHG_SHIFT;
+}
+
+static inline int smb347_charging_enable(struct smb347_charger *smb)
+{
+	/* prevent system from entering s3 while charger is connected */
+	if (!wake_lock_active(&smb->wakelock))
+		wake_lock(&smb->wakelock);
+	return smb347_charging_set(smb, true);
+}
+
+static inline int smb347_charging_disable(struct smb347_charger *smb)
+{
+	int ret;
+
+	ret = smb347_charging_set(smb, false);
+	/* release the wake lock when charger is unplugged */
+	if (wake_lock_active(&smb->wakelock))
+		wake_unlock(&smb->wakelock);
+
+	return ret;
+}
+
+static int smb347_update_online(struct smb347_charger *smb)
+{
+	int ret;
+
+	/*
+	 * Depending on whether valid power source is connected or not, we
+	 * disable or enable the charging. We do it manually because it
+	 * depends on how the platform has configured the valid inputs.
+	 */
+	if (smb347_is_online(smb)) {
+		ret = smb347_charging_enable(smb);
+		if (ret < 0)
+			dev_err(&smb->client->dev,
+				"failed to enable charging\n");
+	} else {
+		if (ret < 0)
+			dev_err(&smb->client->dev,
+				"failed to disable charging\n");
+	}
+
 	return ret;
 }
 
@@ -1654,35 +1916,9 @@ fail:
 }
 #endif
 
-static int smb347_mains_get_property(struct power_supply *psy,
-				     enum power_supply_property prop,
-				     union power_supply_propval *val)
-{
-	struct smb347_charger *smb =
-		container_of(psy, struct smb347_charger, mains);
-	if (prop == POWER_SUPPLY_PROP_ONLINE) {
-		val->intval = smb->mains_online;
-		return 0;
-	}
-	return -EINVAL;
-}
-
 static enum power_supply_property smb347_mains_properties[] = {
 	POWER_SUPPLY_PROP_ONLINE,
 };
-
-static int smb347_usb_get_property(struct power_supply *psy,
-				   enum power_supply_property prop,
-				   union power_supply_propval *val)
-{
-	struct smb347_charger *smb =
-		container_of(psy, struct smb347_charger, usb);
-	if (prop == POWER_SUPPLY_PROP_ONLINE) {
-		val->intval = smb->usb_online;
-		return 0;
-	}
-	return -EINVAL;
-}
 
 bool smb347_has_charger_error(void)
 {
@@ -1701,146 +1937,6 @@ bool smb347_has_charger_error(void)
 	return false;
 }
 
-int smb347_get_charging_status(void)
-{
-	int ret, status;
-	int capacity;
-	int current_now;
-
-	if (!smb347_dev)
-		return -EINVAL;
-
-	if (!smb347_is_online(smb347_dev))
-		return POWER_SUPPLY_STATUS_DISCHARGING;
-
-	ret = smb347_read(smb347_dev, STAT_C);
-	if (ret < 0)
-		return ret;
-
-	dev_info(&smb347_dev->client->dev,
-			"Charging Status: STAT_C:0x%x\n", ret);
-
-        capacity = fg_chip_get_property(POWER_SUPPLY_PROP_CAPACITY);
-	if (capacity == -ENODEV || capacity == -EINVAL) {
-		dev_err(&smb347_dev->client->dev,
-			"Can't read level from FG!\n");
-		return POWER_SUPPLY_HEALTH_UNSPEC_FAILURE;
-	}
-
-        current_now = fg_chip_get_property(POWER_SUPPLY_PROP_CURRENT_NOW);
-	if (current_now == -ENODEV || current_now == -EINVAL) {
-		dev_err(&smb347_dev->client->dev,
-			"Can't read curr from FG!\n");
-		return POWER_SUPPLY_HEALTH_UNSPEC_FAILURE;
-	}
-        if (capacity==100)
-		return POWER_SUPPLY_STATUS_FULL;
-
-
-//TODO!! 
-	if ((ret & STAT_C_CHARGER_ERROR) ||
-		(ret & STAT_C_HOLDOFF_STAT)) {
-		/* set to NOT CHARGING upon charger error
-		 * or charging has stopped.
-		 */
-		status = POWER_SUPPLY_STATUS_NOT_CHARGING;
-	} else {
-		if ((ret & STAT_C_CHG_MASK) >> STAT_C_CHG_SHIFT) {
-			/* set to charging if battery is in pre-charge,
-			 * fast charge or taper charging mode.
-			 */
-			status = POWER_SUPPLY_STATUS_CHARGING;
-		} else if (ret & STAT_C_CHG_TERM) {
-			/* set the status to FULL if battery is not in pre
-			 * charge, fast charge or taper charging mode AND
-			 * charging is terminated at least once.
-			 */
-			status = POWER_SUPPLY_STATUS_FULL;
-		} else {
-			/* in this case no charger error or termination
-			 * occured but charging is not in progress!!!
-			 */
-			status = POWER_SUPPLY_STATUS_NOT_CHARGING;
-		}
-	}
-
-	return status;
-}
-EXPORT_SYMBOL_GPL(smb347_get_charging_status);
-
-
-static enum power_supply_property smb347_usb_properties[] = {
-	POWER_SUPPLY_PROP_ONLINE,
-};
-
-static int smb347_battery_get_property(struct power_supply *psy,
-				       enum power_supply_property prop,
-				       union power_supply_propval *val)
-{
-	struct smb347_charger *smb =
-			container_of(psy, struct smb347_charger, battery);
-	const struct smb347_charger_platform_data *pdata = smb->pdata;
-	int ret;
-
-	ret = smb347_update_status(smb);
-	if (ret < 0)
-		return ret;
-
-	switch (prop) {
-	case POWER_SUPPLY_PROP_STATUS:
-		ret = smb347_get_charging_status();
-		if (ret < 0)
-			return ret;
-		val->intval = ret;
-		break;
-
-	case POWER_SUPPLY_PROP_CHARGE_TYPE:
-		if (!smb347_is_online(smb))
-			return -ENODATA;
-
-		/*
-		 * We handle trickle and pre-charging the same, and taper
-		 * and none the same.
-		 */
-		switch (smb347_charging_status(smb)) {
-		case 1:
-			val->intval = POWER_SUPPLY_CHARGE_TYPE_TRICKLE;
-			break;
-		case 2:
-			val->intval = POWER_SUPPLY_CHARGE_TYPE_FAST;
-			break;
-		default:
-			val->intval = POWER_SUPPLY_CHARGE_TYPE_NONE;
-			break;
-		}
-		break;
-
-	case POWER_SUPPLY_PROP_TECHNOLOGY:
-		val->intval = pdata->battery_info.technology;
-		break;
-
-	case POWER_SUPPLY_PROP_VOLTAGE_MIN_DESIGN:
-		val->intval = pdata->battery_info.voltage_min_design;
-		break;
-
-	case POWER_SUPPLY_PROP_VOLTAGE_MAX_DESIGN:
-		val->intval = pdata->battery_info.voltage_max_design;
-		break;
-
-	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
-		val->intval = pdata->battery_info.charge_full_design;
-		break;
-
-	case POWER_SUPPLY_PROP_MODEL_NAME:
-		val->strval = pdata->battery_info.name;
-		break;
-
-	default:
-		return -EINVAL;
-	}
-
-	return 0;
-}
 
 static enum power_supply_property smb347_battery_properties[] = {
 	POWER_SUPPLY_PROP_STATUS,
@@ -1852,56 +1948,6 @@ static enum power_supply_property smb347_battery_properties[] = {
 	POWER_SUPPLY_PROP_MODEL_NAME,
 };
 
-static int smb347_debugfs_show(struct seq_file *s, void *data)
-{
-	struct smb347_charger *smb = s->private;
-	int ret;
-	u8 reg;
-
-	seq_printf(s, "Control registers:\n");
-	seq_printf(s, "==================\n");
-	seq_printf(s, "#Addr\t#Value\n");
-	for (reg = CFG_CHARGE_CURRENT; reg <= CFG_ADDRESS; reg++) {
-		ret = smb347_read(smb, reg);
-		seq_printf(s, "0x%02x:\t" BYTETOBINARYPATTERN "\n", reg, BYTETOBINARY(ret));
-	}
-	seq_printf(s, "\n");
-
-	seq_printf(s, "Command registers:\n");
-	seq_printf(s, "==================\n");
-	seq_printf(s, "#Addr\t#Value\n");
-	ret = smb347_read(smb, CMD_A);
-	seq_printf(s, "0x%02x:\t" BYTETOBINARYPATTERN "\n", CMD_A, BYTETOBINARY(ret));
-	ret = smb347_read(smb, CMD_B);
-	seq_printf(s, "0x%02x:\t" BYTETOBINARYPATTERN "\n", CMD_B, BYTETOBINARY(ret));
-	ret = smb347_read(smb, CMD_C);
-	seq_printf(s, "0x%02x:\t" BYTETOBINARYPATTERN "\n", CMD_C, BYTETOBINARY(ret));
-	seq_printf(s, "\n");
-
-	seq_printf(s, "Interrupt status registers:\n");
-	seq_printf(s, "===========================\n");
-	seq_printf(s, "#Addr\t#Value\n");
-	for (reg = IRQSTAT_A; reg <= IRQSTAT_F; reg++) {
-		ret = smb347_read(smb, reg);
-		seq_printf(s, "0x%02x:\t" BYTETOBINARYPATTERN "\n", reg, BYTETOBINARY(ret));
-	}
-	seq_printf(s, "\n");
-
-	seq_printf(s, "Status registers:\n");
-	seq_printf(s, "=================\n");
-	seq_printf(s, "#Addr\t#Value\n");
-	for (reg = STAT_A; reg <= STAT_E; reg++) {
-		ret = smb347_read(smb, reg);
-		seq_printf(s, "0x%02x:\t" BYTETOBINARYPATTERN "\n", reg, BYTETOBINARY(ret));
-	}
-
-	return 0;
-}
-
-static int smb347_debugfs_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, smb347_debugfs_show, inode->i_private);
-}
 
 static const struct file_operations smb347_debugfs_fops = {
 	.open		= smb347_debugfs_open,
@@ -2105,35 +2151,6 @@ void smb347_shutdown(struct i2c_client *client)
 }
 
 #ifdef CONFIG_PM
-static int smb347_prepare(struct device *dev)
-{
-	struct smb347_charger *smb = dev_get_drvdata(dev);
-
-#if 0
-	if (smb347_is_online(smb))
-		return -EBUSY;
-#endif
-
-	/*
-	 * disable irq here doesn't mean smb347 interrupt
-	 * can't wake up system. smb347 interrupt is triggered
-	 * by GPIO pin, which is always active.
-	 * When resume callback calls enable_irq, kernel
-	 * would deliver the buffered interrupt (if it has) to
-	 * driver.
-	 */
-	if (smb->client->irq > 0)
-		disable_irq(smb->client->irq);
-
-#if 1
-	cancel_delayed_work_sync(&smb->smb347_statmon_worker);
-#endif
-
-	dev_info(&smb->client->dev, "smb347 suspend\n");
-
-	return 0;
-}
-
 static void smb347_complete(struct device *dev)
 {
 	struct smb347_charger *smb = dev_get_drvdata(dev);
@@ -2166,31 +2183,6 @@ static void smb347_complete(struct device *dev)
 #else
 #define smb347_prepare NULL
 #define smb347_complete NULL
-#endif
-
-#ifdef CONFIG_PM_RUNTIME
-static int smb347_runtime_suspend(struct device *dev)
-{
-	dev_info(dev, "%s called\n", __func__);
-	return 0;
-}
-
-static int smb347_runtime_resume(struct device *dev)
-{
-	dev_info(dev, "%s called\n", __func__);
-	return 0;
-}
-
-static int smb347_runtime_idle(struct device *dev)
-{
-
-	dev_info(dev, "%s called\n", __func__);
-	return 0;
-}
-#else
-#define smb347_runtime_suspend	NULL
-#define smb347_runtime_resume	NULL
-#define smb347_runtime_idle	NULL
 #endif
 
 static int smb347_suspend(struct device *dev)

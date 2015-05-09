@@ -173,13 +173,13 @@ struct smb347_otg_event {
  * @pdata: pointer to platform data
  */
 struct smb347_charger {
-	struct mutex		lock;
-	struct i2c_client	*client;
+	struct mutex		lock;  // offset 0
+	struct i2c_client	*client; // offset 0x28
 	struct power_supply	mains;
 	struct power_supply	usb;
 	struct power_supply	battery;
-	bool			mains_online;
-	bool			usb_online;
+	bool			mains_online;     // offset 0x270
+	bool			usb_online;       // offset 0x271
 	bool			charging_enabled;
 	bool			running;
 	struct dentry		*dentry;
@@ -188,9 +188,9 @@ struct smb347_charger {
 	struct work_struct	otg_work;
 	struct list_head	otg_queue;
 	spinlock_t		otg_queue_lock;
-	bool			otg_enabled;
+	bool			otg_enabled;       // offset 0x2b4
 	bool			otg_battery_uv;
-	const struct smb347_charger_platform_data	*pdata;
+	const struct smb347_charger_platform_data	*pdata; // offset 0x2b8
 #if 1
 	struct delayed_work	smb347_statmon_worker;
 #endif
@@ -355,17 +355,9 @@ static const unsigned int ccc_tbl[] = {
 
 #define CFG_FAST_CHARGE_SMB358_A600CG	BIT(5)|BIT(7)
 
-static int hw_id_flag=0;					/*hw id, 0:EVB, 1:SR1, 2:SR2*/
-static int project_id_flag=0;				/*project id, 0:A500CG, 1:A600CG, 2:A502CG*/
-static int bz_5w_flag=0;					/*0=1200mA, 1=1000mA*/
 extern struct battery_info_reply batt_info;
-extern unsigned int query_cable_status(void);
 
 DEFINE_MUTEX(batt_info_mutex);
-
-static char *supply_list[] = {
-        "battery",
-};
 
 struct battery_info_reply batt_info = {
         .drv_status = DRV_NOT_READY,
@@ -492,136 +484,6 @@ static int smb347_set_writable(struct smb347_charger *smb, bool writable)
 	return smb347_write(smb, CMD_A, ret);
 }
 
-#if 0
-static int otg(int toggle)
-{
-	int ret;
-
-	CHR_info("%s entered\n", __func__);
-
-	if (!smb347_dev) {
-		CHR_info("Warning: smb347_dev is null due to probe function has error\n");
-		return 1;
-	}
-
-	ret = smb347_set_writable(smb347_dev, true);
-	if (ret < 0)
-		return ret;
-
-	if (toggle) {
-		if( (hw_id_flag==0)&&(project_id_flag==0) ) {
-			/* 1.Disable OTG */
-			ret = smb347_masked_write(smb347_dev->client, CMD_A_REG,
-				BIT(4), 0);
-			if (ret) {
-//				CHR_err("Failed to set OTG Disable bit ret=%d\n", ret);
-			return ret;
-			}
-
-			/* 2.Set OTG current limit to 250mA & UVLO 2.7V*/
-			// Refer to SMB347 Application Note 72 to solve serious problems
-			ret = smb347_masked_write(smb347_dev->client, OTG_TLIM_THERM_CNTRL_REG,
-				BIT(0)|BIT(1)|BIT(2)|BIT(3), BIT(2));
-			if (ret) {
-//				CHR_err("Failed to set OTG current limit 250mA. ret=%d\n", ret);
-				return ret;
-			}
-			/* 3.Enable OTG Function*/
-			ret = smb347_masked_write(smb347_dev->client, CMD_A_REG,
-				BIT(4), BIT(4));
-			if (ret) {
-//				CHR_err("Failed to set OTG Enable bit ret=%d\n", ret);
-				return ret;
-			}
-			/* 4.Set OTG current limit to 750mA & UVLO 2.7V*/
-			// Refer to SMB347 Application Note 72 to solve serious problems
-			ret = smb347_masked_write(smb347_dev->client, OTG_TLIM_THERM_CNTRL_REG,
-				BIT(0)|BIT(1)|BIT(2)|BIT(3), BIT(2)|BIT(3));
-			if (ret) {
-//				CHR_err("Failed to set OTG current limit 750mA. ret=%d\n", ret);
-				return ret;
-			}
-
-			/* OTG 5V function set to PIN control due to HW will reset IC to default
-				when external USB device is removed. This function support in SR2. And
-				charger IC will be replaced with smb345 */
-
-			/* 5.OTG function change to PIN control */
-
-			ret = smb347_masked_write(smb347_dev->client, OTHER_CTRL_A_REG,
-				BIT(6)|BIT(7), BIT(6));
-			if (ret) {
-//				CHR_err("Failed to set OTGID_PIN_CONTROL_BITS rc=%d\n", ret);
-				return ret;
-				}
-		}else {
-			//use pin to confrol
-			gpio_direction_output(SMB358_OTG_CONTROL_PIN, 1);
-		}
-	}else {
-		if( (hw_id_flag>=1)||(project_id_flag==1) ) {
-			//use pin to confrol
-			gpio_direction_output(SMB358_OTG_CONTROL_PIN, 0);
-		}
-	}
-
-	smb347_dev->otg_enabled = (toggle > 0 ? true : false);
-	return 0;
-}
-
-
-int setSMB347Charger(int usb_state)
-{
-	int ret = 0;
-        batt_info.cable_source = usb_state;
-  if (!batt_info.isValidBattID) {
-      CHR_info("%s  not Valid BattID\n", __func__);
-      smb347_charging_toggle(false);
-      return 0;
-  }
-	CHR_info("%s  enter\n", __func__);
-	//CHR_info("not_ready_flag=%d\n", not_ready_flag);
-	if(not_ready_flag&&(usb_state==ENABLE_5V||usb_state==DISABLE_5V)) {
-		CHR_info("charger not ready yet\n");
-		return 0;
-	}
-	if (smb347_dev->pdata->use_mains)
-		power_supply_changed(&smb347_dev->mains);
-	if (smb347_dev->pdata->use_usb)
-		power_supply_changed(&smb347_dev->usb);
-	switch (usb_state)
-	{
-	case USB_IN:
-		CHR_info("usb_state: USB_IN\n");
-		usb_to_battery_callback(USB_PC);
-		break;
-	case AC_IN:
-		CHR_info("usb_state: AC_IN\n");
-		usb_to_battery_callback(USB_ADAPTER);
-		break;
-	case CABLE_OUT:
-		CHR_info("usb_state: CABLE_OUT\n");
-		usb_to_battery_callback(NO_CABLE);
-		break;
-	case ENABLE_5V:
-		CHR_info("usb_state: ENABLE_5V\n");
-		ret = otg(1);
-		break;
-	case DISABLE_5V:
-		CHR_info("usb_state: DISABLE_5V\n");
-		ret = otg(0);
-		break;
-	default:
-		CHR_info("ERROR: wrong usb state value = %d\n", usb_state);
-		ret = 1;
-	}
-
-	return ret;
-}
-EXPORT_SYMBOL(setSMB347Charger);
-
-#endif
-
 // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #if 1
 /* Convert register value to current using lookup table */
@@ -714,489 +576,6 @@ static void smb347_status_monitor(struct work_struct *work)
 }
 #endif
 
-#if 0 && ASUS
-int smb347_control_JEITA(bool on) {
-    int ret = 0;
-
-	if (!smb347_dev) {
-		CHR_info("Warning: smb347_dev is null due to probe function has error\n");
-		return 1;
-	}
-
-	CHR_info("%s: *** control_JEITA: %s ***\n", __func__, on ? "on" : "off");
-
-	mutex_lock(&smb347_dev->lock);
-
-	ret = smb347_set_writable(smb347_dev, true);
-	if (ret < 0)
-		goto out;
-
-	/* Config CFG_TEMP_LIMIT register */
-	ret = smb347_read(smb347_dev, CFG_TEMP_LIMIT);
-	if (ret < 0)
-		goto out;
-
-	/*
-	 * Make the control JEITA functionality controllable by a write to the
-	 * command register unless pin control is specified in the platform
-	 * data.
-	 */
-	ret &= (BIT(6)|BIT(7));
-	if (on) {
-		ret |= (BIT(0)|BIT(1)|BIT(4)|BIT(5));
-	} else {
-	  ret &= 0xDD;
-		ret |= (BIT(0)|BIT(4));
-	}
-
-  CHR_info("write control JEITA = 0x%02x\n", ret);
-	ret = smb347_write(smb347_dev, CFG_TEMP_LIMIT, ret);
-	if (ret < 0)
-		goto out;
-
-  // === Set Soft Hot Limit Behavior ====
-  /* Config CFG_THERM register */
-	ret = smb347_read(smb347_dev, CFG_THERM);
-	if (ret < 0)
-		goto out;
-
-  ret &= ~(BIT(0)|BIT(1));
-	if (on) {
-		// No Response
-		if(project_id_flag==2)
-			ret &= ~(BIT(2)|BIT(3));
-	} else {
-		// Float Voltage Compensation
-		ret |= BIT(1);
-		if(project_id_flag==2) {
-			ret &= ~(BIT(3));
-			ret |= BIT(2);
-		}
-	}
-
-  CHR_info("write control JEITA, Set Soft Hot Limit Behavior = 0x%02x\n", ret);
-	ret = smb347_write(smb347_dev,  CFG_THERM, ret);
-	if (ret < 0)
-		goto out;
-
-out:
-	mutex_unlock(&smb347_dev->lock);
-	return ret;
-
-}
-#endif
-
-int smb347_get_aicl_result(void) {
-        int ret = 0;
-
-	if (!smb347_dev) {
-		CHR_info("Warning: smb347_dev is null due to probe function has error\n");
-		return 1;
-	}
-
-	CHR_info(" ***  %s ***\n", __func__);
-
-	mutex_lock(&smb347_dev->lock);
-
-	ret = smb347_set_writable(smb347_dev, true);
-	if (ret < 0)
-		goto out;
-
-	/* Config VAR_FUNC_REG register */
-	ret = smb347_read(smb347_dev, STAT_E);
-	if (ret < 0)
-		goto out;
-
-        ret &= 0x0f;
-        CHR_info("smb347 get aicl result = 0x%02x\n", ret);
-
-	CHR_info("dump register 1: 0x00 is 0x%02x, 0x01 is 0x%02x, 0x02 is 0x%02x, 0x07 is 0x%02x, 0x0c is 0x%02x\n", smb347_read(smb347_dev, 0x00), smb347_read(smb347_dev, 0x01), smb347_read(smb347_dev, 0x02), smb347_read(smb347_dev, 0x0c), smb347_read(smb347_dev, 0x0c));
-	CHR_info("dump register 2: 0x0d is 0x%02x, 0x3c is 0x%02x, 0x3d is 0x%02x, 0x3f is 0x%02x\n", smb347_read(smb347_dev, 0x0d), smb347_read(smb347_dev, 0x3c), smb347_read(smb347_dev, 0x3d), smb347_read(smb347_dev, 0x3f));
-
-out:
-	mutex_unlock(&smb347_dev->lock);
-	return ret;
-
-}
-
-int smb347_set_battery_0V(void) {
-        int ret = 0;
-
-	if (!smb347_dev) {
-		CHR_info("Warning: smb347_dev is null due to probe function has error\n");
-		return 1;
-	}
-
-	CHR_info(" ***  %s ***\n", __func__);
-
-	mutex_lock(&smb347_dev->lock);
-
-	ret = smb347_set_writable(smb347_dev, true);
-	if (ret < 0)
-		goto out;
-
-	/* Config VAR_FUNC_REG register */
-	ret = smb347_read(smb347_dev, VAR_FUNC_REG);
-	if (ret < 0)
-		goto out;
-
-	ret &= ~(BIT(1));
-        CHR_info("write  battery 0V does not charger cycle = 0x%02x\n", ret);
-	ret = smb347_write(smb347_dev, VAR_FUNC_REG, ret);
-	if (ret < 0)
-		goto out;
-
-out:
-	mutex_unlock(&smb347_dev->lock);
-	return ret;
-
-}
-
-int smb347_set_voltage(bool on) {
-    int ret = 0;
-
-	if (!smb347_dev) {
-		CHR_info("Warning: smb347_dev is null due to probe function has error\n");
-		return 1;
-	}
-
-	CHR_info("%s: *** charging voltage: %s ***\n", __func__, on ? "4.11V" : "4.32V");
-
-	mutex_lock(&smb347_dev->lock);
-
-	ret = smb347_set_writable(smb347_dev, true);
-	if (ret < 0)
-		goto out;
-
-	/* Config CFG_FLOAT_VOLTAGE register */
-	ret = smb347_read(smb347_dev, CFG_FLOAT_VOLTAGE);
-	if (ret < 0)
-		goto out;
-
-	/*
-	 * Make the voltage functionality controllable by a write to the
-	 * command register unless pin control is specified in the platform
-	 * data.
-	 */
-	ret &= (BIT(6)|BIT(7));
-	if (on) {
-		/* voltage = 4.11v */
-		ret |= CFG_411V;
-	} else {
-		/* voltage = 4.32v */
-		if( (hw_id_flag==0)&&(project_id_flag==0) )
-			ret |= CFG_432V;
-		else
-			ret |= CFG_432V_SMB358;
-	}
-
-	CHR_info("write voltage = 0x%02x\n", ret);
-	ret = smb347_write(smb347_dev, CFG_FLOAT_VOLTAGE, ret);
-	if (ret < 0)
-		goto out;
-
-	/* Config recharge register */
-	ret = smb347_read(smb347_dev, CFG_CURRENT_LIMIT);
-	if (ret < 0)
-		goto out;
-
-	if (on) {
-		/* voltage = 4.11v, recharge inhibit = 100mV, 01h[3:2] = 01*/
-		ret |= (BIT(2));
-		ret &= ~(BIT(3));
-	} else {
-		/* in A500/A501/A502/A600, recharge inhibit = 100mV, 01h[3:2] = 01*/
-		ret |= (BIT(2));
-		ret &= ~(BIT(3));
-		/* voltage = 4.32v, recharge inhibit = 200mV, 01h[3:2] = 10*/
-		//ret |= (BIT(3));
-		//ret &= ~(BIT(2));
-	}
-
-	CHR_info("write recharge voltage = 0x%02x\n", ret);
-	ret = smb347_write(smb347_dev, CFG_CURRENT_LIMIT, ret);
-	if (ret < 0)
-		goto out;
-out:
-	mutex_unlock(&smb347_dev->lock);
-	return ret;
-
-}
-
-int smb347_set_fast_charge(void) {
-    int ret = 0;
-
-	if (!smb347_dev) {
-		CHR_info("Warning: smb347_dev is null due to probe function has error\n");
-		return 1;
-	}
-
-	CHR_info("== %s ==\n", __func__);
-
-	mutex_lock(&smb347_dev->lock);
-
-	ret = smb347_set_writable(smb347_dev, true);
-	if (ret < 0)
-		goto out;
-
-	/* Config CFG_CHARGE_CURRENT register */
-	ret = smb347_read(smb347_dev, CFG_CHARGE_CURRENT);
-	if (ret < 0)
-		goto out;
-
-	/*
-	 * Make the fast charge functionality controllable by a write to the
-	 * command register unless pin control is specified in the platform
-	 * data.
-	 */
-	 if((project_id_flag==0)||(project_id_flag==2)) {
-		 if( hw_id_flag==0 )
-			ret = CFG_FAST_CHARGE;
-		 else {
-			if((project_id_flag==2)&&((temp_status_502==0)||(temp_status_502==1))) {
-				//in A502CG, small current when in low temp
-				ret &= ~(BIT(7)|BIT(5));
-				ret |= (BIT(6));
-			}else {
-				ret &= ~(BIT(7));
-				ret |= CFG_FAST_CHARGE_SMB358;
-			}
-
-			if(project_id_flag==2) {
-				/*set terminate curent to 40mA in A502CG*/
-				ret |= (BIT(0));
-				ret &= ~(BIT(2)|BIT(1));
-			}else {
-				/*set terminate curent to 80mA*/
-				ret &= ~(BIT(2));
-				ret |= (BIT(0)|BIT(1));
-			}
-		}
-	 }else {
-		ret &= ~(BIT(6));
-		ret |= CFG_FAST_CHARGE_SMB358_A600CG;
-	 }
-        CHR_info("set fast charge = 0x%02x\n", ret);
-	ret = smb347_write(smb347_dev, CFG_CHARGE_CURRENT, ret);
-	if (ret < 0)
-		goto out;
-
-        /* Config CFG_SOFT_LIMIT register */
-	ret = smb347_read(smb347_dev, CFG_SOFT_LIMIT);
-	if (ret < 0)
-		goto out;
-
-	/*
-	 * Make the fast charge functionality controllable by a write to the
-	 * command register unless pin control is specified in the platform
-	 * data.
-	 */
-	 if((project_id_flag==0)||(project_id_flag==2)) {
-		ret &= ~(BIT(7));
-		if( hw_id_flag==0 ) {
-			ret |= CFG_SOFT_700mA;
-			CHR_info("set soft limit 700mA = 0x%02x\n", ret);
-		}
-		else {
-			ret |= CFG_SOFT_450mA_SMB358;
-			CHR_info("set soft limit 450mA = 0x%02x\n", ret);
-		}
-	}else {
-		ret |= (BIT(7));
-		ret &= ~CFG_SOFT_450mA_SMB358;
-		CHR_info("set soft limit 600mA in A600CG = 0x%02x\n", ret);
-	}
-	ret = smb347_write(smb347_dev, CFG_SOFT_LIMIT, ret);
-	if (ret < 0)
-		goto out;
-out:
-	mutex_unlock(&smb347_dev->lock);
-	return ret;
-
-}
-
-int smb347_AC_in_current(void) {
-    int ret = 0;
-
-	if (!smb347_dev) {
-		CHR_info("Warning: smb347_dev is null due to probe function has error\n");
-		return 1;
-	}
-
-	CHR_info("== %s ==\n", __func__);
-
-	mutex_lock(&smb347_dev->lock);
-
-	ret = smb347_set_writable(smb347_dev, true);
-	if (ret < 0)
-		goto out;
-	if( (project_id_flag==0)&&(hw_id_flag==0) ) {
-		/*===A500CG EVB===*/
-		/* Config VAR_FUNC_REG register */
-		ret = smb347_read(smb347_dev, VAR_FUNC_REG);
-		if (ret < 0)
-			goto out;
-
-		ret &= ~CFG_AICL;
-		ret = smb347_write(smb347_dev, VAR_FUNC_REG, ret);
-		if (ret < 0)
-			goto out;
-
-		/* Config INPUT_CURRENT_LIMIT_REG register */
-		ret = smb347_read(smb347_dev, INPUT_CURRENT_LIMIT_REG);
-		if (ret < 0)
-			goto out;
-
-		ret &= 0xf0;
-		ret |= CFG_1200mA;
-		CHR_info("set AC IN = 0x%02x\n", ret);
-		ret = smb347_write(smb347_dev, INPUT_CURRENT_LIMIT_REG, ret);
-		if (ret < 0)
-			goto out;
-
-		/* Config VAR_FUNC_REG register */
-		ret = smb347_read(smb347_dev, VAR_FUNC_REG);
-		if (ret < 0)
-			goto out;
-
-		ret |=CFG_AICL;
-		ret = smb347_write(smb347_dev, VAR_FUNC_REG, ret);
-		if (ret < 0)
-			goto out;
-	}else  if( (project_id_flag==0)&&(hw_id_flag==1) ) {
-		/*===A500CG SR1===*/
-		/* Config INPUT_CURRENT_LIMIT_REG register */
-		ret = smb347_read(smb347_dev, INPUT_CURRENT_LIMIT_REG);
-		if (ret < 0)
-			goto out;
-
-		ret &= 0x0f;
-		ret |= CFG_1200mA_SMB358;
-		ret = smb347_write(smb347_dev, INPUT_CURRENT_LIMIT_REG, ret);
-		if (ret < 0)
-			goto out;
-
-		ret = smb347_read(smb347_dev, CMD_B_REG);
-
-		ret |= (BIT(0)|BIT(1));
-		ret = smb347_write(smb347_dev, CMD_B_REG, ret);
-		if (ret < 0)
-			goto out;
-
-		ret = smb347_read(smb347_dev, PIN_ENABLE_CTRL_REG);
-
-		ret &= ~CFG_AICL;
-		ret = smb347_write(smb347_dev, PIN_ENABLE_CTRL_REG, ret);
-		if (ret < 0)
-			goto out;
-
-		CHR_info("in A500CG SR1, 01h=0x%02x, 31h=0x%02x, 06h=0x%02x\n", smb347_read(smb347_dev, 0x01), smb347_read(smb347_dev, 0x31), smb347_read(smb347_dev, 0x06));
-	} else {
-		/*===A50XCG >= SR2 & A600CG===*/
-		/* Config VAR_FUNC_REG register */
-		ret = smb347_read(smb347_dev, VAR_FUNC_REG);
-		if (ret < 0)
-			goto out;
-
-		ret &= ~CFG_AICL;
-		ret = smb347_write(smb347_dev, VAR_FUNC_REG, ret);
-		if (ret < 0)
-			goto out;
-
-		/* Config INPUT_CURRENT_LIMIT_REG register */
-		ret = smb347_read(smb347_dev, INPUT_CURRENT_LIMIT_REG);
-		if (ret < 0)
-			goto out;
-
-		ret &= 0x0f;
-		if(bz_5w_flag==1) //for BZ setting
-			ret |= (BIT(4)|BIT(5));
-		else
-			ret |= CFG_1200mA_SMB358;
-		ret = smb347_write(smb347_dev, INPUT_CURRENT_LIMIT_REG, ret);
-		if (ret < 0)
-			goto out;
-
-		/* Config VAR_FUNC_REG register */
-		ret = smb347_read(smb347_dev, VAR_FUNC_REG);
-		if (ret < 0)
-			goto out;
-
-		ret |=CFG_AICL;
-		ret = smb347_write(smb347_dev, VAR_FUNC_REG, ret);
-		if (ret < 0)
-			goto out;
-
-		CHR_info("in A500CG SR2 & A600CG, 01h=0x%02x, 31h=0x%02x, 06h=0x%02x\n", smb347_read(smb347_dev, 0x01), smb347_read(smb347_dev, 0x31), smb347_read(smb347_dev, 0x06));
-	}
-out:
-	mutex_unlock(&smb347_dev->lock);
-	return ret;
-
-}
-
-int smb347_charging_toggle(bool on)
-{
-	int ret = 0;
-
-	if (!smb347_dev) {
-		CHR_info("Warning: smb347_dev is null due to probe function has error\n");
-		return 1;
-	}
-
-	CHR_info("%s: *** charging toggle: %s ***\n", __func__, on ? "ON" : "OFF");
-
-	mutex_lock(&smb347_dev->lock);
-
-	ret = smb347_set_writable(smb347_dev, true);
-	if (ret < 0)
-		goto out;
-
-	/* Config CFG_PIN register */
-
-	ret = smb347_read(smb347_dev, CFG_PIN);
-	if (ret < 0)
-		goto out;
-
-	/*
-	 * Make the charging functionality controllable by a write to the
-	 * command register unless pin control is specified in the platform
-	 * data.
-	 */
-	ret &= ~CFG_PIN_EN_CTRL_MASK;
-	if (on) {
-		/* set Pin Controls - active low (ME371MG connect EN to GROUND) */
-		ret |= CFG_PIN_EN_CTRL_ACTIVE_LOW;
-	} else {
-		/* Do nothing, 0 means i2c control
-			. I2C Control - "0" in Command Register disables charger */
-	}
-
-	ret = smb347_write(smb347_dev, CFG_PIN, ret);
-	if (ret < 0)
-		goto out;
-#if 0
-	/* Config CMD_A register */
-
-	ret = smb347_read(smb347_dev, CMD_A);
-	if (ret < 0)
-		goto out;
-
-	//smb347_dev->charging_enabled = on;
-
-	if (on)
-		ret |= CMD_A_CHG_ENABLED;
-	else
-		ret &= ~CMD_A_CHG_ENABLED;
-
-	ret = smb347_write(smb347_dev, CMD_A, ret);
-#endif
-	CHR_info("%s: charging toggle done without error\n", __func__);
-out:
-	mutex_unlock(&smb347_dev->lock);
-	return ret;
-}
-
 #if CANCEL_SOFT_HOT_TEMP_LIMIT
 static int cancel_soft_hot_temp_limit(struct smb347_charger *smb)
 {
@@ -1222,6 +601,13 @@ static int cancel_soft_hot_temp_limit(struct smb347_charger *smb)
 }
 #endif
 
+struct lock_class_key *fg_psy;
+int check_batt_psy(struct power_supply *psy)
+{ // todo
+  return 0;
+}
+
+
 #if 1
 /*
  * smb347_is_online - returns whether input power source is connected
@@ -1233,7 +619,7 @@ static int cancel_soft_hot_temp_limit(struct smb347_charger *smb)
  * cable is connected.
  */
 static bool smb347_is_online(struct smb347_charger *smb)
-{
+{ // verified ok
 	bool ret;
 
 	mutex_lock(&smb->lock);
@@ -2007,7 +1393,7 @@ static irqreturn_t smb347_interrupt(int irq, void *data)
 		dev_err(&smb->client->dev,
 			"****** charging stopped due to charger error ******\n");
 
-#if 0
+#if 1
 		if (smb->pdata->show_battery)
 			power_supply_changed(&smb->battery);
 #endif
@@ -2023,7 +1409,7 @@ static irqreturn_t smb347_interrupt(int irq, void *data)
 	if (irqstat_c & (IRQSTAT_C_TERMINATION_IRQ | IRQSTAT_C_TAPER_IRQ)) {
 		if ((irqstat_c & IRQSTAT_C_TERMINATION_STAT) &&
 						smb->pdata->show_battery)
-#if 0
+#if 1
 			power_supply_changed(&smb->battery);
 #endif
 		dev_info(&smb->client->dev,
@@ -2041,7 +1427,7 @@ static irqreturn_t smb347_interrupt(int irq, void *data)
 		if (irqstat_d & IRQSTAT_D_CHARGE_TIMEOUT_STAT)
 			dev_info(&smb->client->dev,
 				"[Charge Timeout]:charging stopped\n");
-#if 0
+#if 1
 		if (smb->pdata->show_battery)
 			power_supply_changed(&smb->battery);
 #endif
@@ -2054,7 +1440,7 @@ static irqreturn_t smb347_interrupt(int irq, void *data)
 	 */
 	if (irqstat_e & (IRQSTAT_E_USBIN_UV_IRQ | IRQSTAT_E_DCIN_UV_IRQ)) {
 		if (smb347_update_status(smb) > 0) {
-#if 0
+#if 1
 			smb347_update_online(smb);
 			if (smb->pdata->use_mains)
 				power_supply_changed(&smb->mains);
@@ -2093,7 +1479,7 @@ static int smb347_irq_set(struct smb347_charger *smb, bool enable)
 {
 	int ret;
 
-#if 0
+#if 1
 	ret = smb347_set_writable(smb, true);
 	if (ret < 0)
 		return ret;
@@ -2106,7 +1492,7 @@ static int smb347_irq_set(struct smb347_charger *smb, bool enable)
 	 *	- charger error
 	 */
 	if (enable) {
-#if 0
+#if 1
 		int val = CFG_FAULT_IRQ_DCIN_UV;
 
 		if (smb->otg)
@@ -2131,7 +1517,7 @@ static int smb347_irq_set(struct smb347_charger *smb, bool enable)
 
 		ret = smb347_write(smb, CFG_PIN, ret);
 	} else {
-#if 0
+#if 1
 		ret = smb347_write(smb, CFG_FAULT_IRQ, 0);
 		if (ret < 0)
 			goto fail;
@@ -2151,7 +1537,7 @@ static int smb347_irq_set(struct smb347_charger *smb, bool enable)
 	}
 
 fail:
-#if 0
+#if 1
 	smb347_set_writable(smb, false);
 #endif
 	return ret;
@@ -2229,7 +1615,7 @@ static inline int smb347_irq_disable(struct smb347_charger *smb)
 static int smb347_irq_init(struct smb347_charger *smb)
 {
     int ret;
-#if 0
+#if 1
         const struct smb347_charger_platform_data *pdata = smb->pdata;
 	int ret, irq = gpio_to_irq(pdata->irq_gpio);
 
@@ -2271,15 +1657,13 @@ static int smb347_irq_init(struct smb347_charger *smb)
 	if (ret < 0)
 		goto fail_readonly;
 
-#if 0
 	smb347_set_writable(smb, false);
 	smb->client->irq = irq;
 	enable_irq_wake(smb->client->irq);
-#endif
 	return 0;
 
 fail_readonly:
-#if 0
+#if 1
 	smb347_set_writable(smb, false);
 fail_irq:
 	free_irq(irq, smb);
@@ -2292,19 +1676,14 @@ fail:
 }
 #endif
 
-#if 1
 static int smb347_mains_get_property(struct power_supply *psy,
 				     enum power_supply_property prop,
 				     union power_supply_propval *val)
 {
-	//struct smb347_charger *smb =
-		//container_of(psy, struct smb347_charger, mains);
+	struct smb347_charger *smb =
+		container_of(psy, struct smb347_charger, mains);
 	if (prop == POWER_SUPPLY_PROP_ONLINE) {
-		//val->intval = smb->mains_online;
-		if ((batt_info.cable_source==AC_IN))
-			val->intval = 1;
-		else
-			val->intval = 0;
+		val->intval = smb->mains_online;
 		return 0;
 	}
 	return -EINVAL;
@@ -2318,19 +1697,14 @@ static int smb347_usb_get_property(struct power_supply *psy,
 				   enum power_supply_property prop,
 				   union power_supply_propval *val)
 {
-	//struct smb347_charger *smb =
-		//container_of(psy, struct smb347_charger, usb);
+	struct smb347_charger *smb =
+		container_of(psy, struct smb347_charger, usb);
 	if (prop == POWER_SUPPLY_PROP_ONLINE) {
-		//val->intval = smb->usb_online;
-		if ((batt_info.cable_source==USB_IN))
-			val->intval = 1;
-		else
-			val->intval = 0;
+		val->intval = smb->usb_online;
 		return 0;
 	}
 	return -EINVAL;
 }
-#endif
 
 bool smb347_has_charger_error(void)
 {
@@ -2356,7 +1730,7 @@ int smb347_get_charging_status(void)
 	if (!smb347_dev)
 		return -EINVAL;
 
-#if 0
+#if 1
 	if (!smb347_is_online(smb347_dev))
 		return POWER_SUPPLY_STATUS_DISCHARGING;
 #endif
@@ -2365,7 +1739,7 @@ int smb347_get_charging_status(void)
 	if (ret < 0)
 		return ret;
 
-#if 0
+#if 1
 	dev_info(&smb347_dev->client->dev,
 			"Charging Status: STAT_C:0x%x\n", ret);
 #endif
@@ -2398,13 +1772,12 @@ int smb347_get_charging_status(void)
 
 	return status;
 }
-//EXPORT_SYMBOL_GPL(smb347_get_charging_status);
+EXPORT_SYMBOL_GPL(smb347_get_charging_status);
 
 
 static enum power_supply_property smb347_usb_properties[] = {
 	POWER_SUPPLY_PROP_ONLINE,
 };
-#if 1
 
 static int smb347_battery_get_property(struct power_supply *psy,
 				       enum power_supply_property prop,
@@ -2484,7 +1857,6 @@ static enum power_supply_property smb347_battery_properties[] = {
 	POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN,
 	POWER_SUPPLY_PROP_MODEL_NAME,
 };
-#endif
 
 static int smb347_debugfs_show(struct seq_file *s, void *data)
 {
@@ -2543,63 +1915,6 @@ static const struct file_operations smb347_debugfs_fops = {
 	.llseek		= seq_lseek,
 	.release	= single_release,
 };
-/*
-static int cable_status_notify2(struct notifier_block *self, unsigned long action, void *dev)
-{
-   if (ischargerSuspend) {
-//       CHR_info("chager is suspend but USB still notify !!!\n", __func__);
-       //wake_lock(&wakelock_cable);
-       isUSBSuspendNotify = true;
-       return NOTIFY_OK;
-   }
-
-   switch (action) {
-      case CHRG_SDP:
-         CHR_info("%s CHRG_SDP !!!\n", __func__);
-         setSMB347Charger(USB_IN);
-         break;
-
-      case CHRG_CDP:
-         CHR_info("%s CHRG_CDP !!!\n", __func__);
-         setSMB347Charger(AC_IN);
-         break;
-
-      case CHRG_DCP:
-          CHR_info("%s CHRG_DCP !!!\n", __func__);
-          setSMB347Charger(AC_IN);
-          break;
-
-      case CHRG_ACA:
-          CHR_info("%s CHRG_ACA !!!\n", __func__);
-          setSMB347Charger(AC_IN);
-          break;
-
-      case CHRG_SE1:
-          CHR_info("%s CHRG_SE1 !!!\n", __func__);
-          setSMB347Charger(AC_IN);
-          break;
-
-      case CHRG_MHL:
-          CHR_info("%s CHRG_MHL !!!\n", __func__);
-          setSMB347Charger(AC_IN);
-          break;
-
-      case CHRG_UNKNOWN:
-      default:
-          CHR_info("%s CHRG_UNKNOWN !!!\n", __func__);
-          setSMB347Charger(CABLE_OUT);
-	  break;
-   }
-   return NOTIFY_OK;
-}
-
-static struct notifier_block cable_status_notifier2 = {
-	.notifier_call = cable_status_notify2,
-};
-
-extern int cable_status_register_client(struct notifier_block *nb);
-extern int cable_status_unregister_client(struct notifier_block *nb);
-*/
 
 static int smb347_probe(struct i2c_client *client,
 			const struct i2c_device_id *id)
@@ -2608,9 +1923,8 @@ static int smb347_probe(struct i2c_client *client,
 	struct device *dev = &client->dev;
 	struct smb347_charger *smb;
 	int ret;
-	//uint8_t reg_val;
 
-	CHR_info("==== smb347_probe ====\n");
+	//CHR_info("==== smb347_probe ====\n");
 
 	/*read project id first*/
 	pdata = dev->platform_data;
@@ -2623,18 +1937,21 @@ static int smb347_probe(struct i2c_client *client,
 	smb = devm_kzalloc(dev, sizeof(*smb), GFP_KERNEL);
 	if (!smb)
 		return -ENOMEM;
+	smb->client = client;
+	smb->pdata = pdata;
 
 	i2c_set_clientdata(client, smb);
 
-	mutex_init(&smb->lock);
-	smb->client = client;
-	smb->pdata = pdata;
+	__mutex_init(&smb->lock, "&smb->lock", fg_psy);
 
 #if 1
 	/* init wake lock */
 	wake_lock_init(&smb->wakelock,
 		WAKE_LOCK_SUSPEND, "smb347_wakelock");
 #endif
+        // from ramos binary
+	void *gpadc = intel_mid_gpadc_alloc(1, 0x309);
+
 
 	/* enable register writing - chris */
 	ret = smb347_set_writable(smb, true);

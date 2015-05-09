@@ -140,6 +140,7 @@ struct smb347_charger_platform_data {
 	bool		show_battery;
 	int		irq_gpio;
 	int		inok_gpio;
+	int		susp_gpio;
 	enum smb347_chg_enable enable_control;
 	enum smb347_otg_control otg_control;
 };

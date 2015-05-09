@@ -195,7 +195,8 @@ struct smb347_charger {
 	struct delayed_work	smb347_statmon_worker;
 #endif
 	/* wake lock to prevent S3 during charging */
-	struct wake_lock wakelock;
+	struct wake_lock wakelock;    // offset 0x308
+	void *adc; // do not know what is it
 };
 
 static struct smb347_charger *smb347_dev;
@@ -375,7 +376,7 @@ struct battery_info_reply batt_info = {
 
 struct wake_lock wakelock_cable, wakelock_cable_t;
 
-static int smb347_read_reg(struct i2c_client *client, int reg,
+/*static int smb347_read_reg(struct i2c_client *client, int reg,
 				u8 *val, int ifDebug)
 {
 	s32 ret;
@@ -394,8 +395,8 @@ static int smb347_read_reg(struct i2c_client *client, int reg,
 
 	return 0;
 }
-
-static int smb347_write_reg(struct i2c_client *client, int reg,
+*/
+/*static int smb347_write_reg(struct i2c_client *client, int reg,
 						u8 val)
 {
 	s32 ret;
@@ -412,9 +413,9 @@ static int smb347_write_reg(struct i2c_client *client, int reg,
 		return ret;
 	}
 	return 0;
-}
+}*/
 
-static int smb347_masked_write(struct i2c_client *client, int reg,
+/*static int smb347_masked_write(struct i2c_client *client, int reg,
 		u8 mask, u8 val)
 {
 	s32 rc;
@@ -435,7 +436,7 @@ static int smb347_masked_write(struct i2c_client *client, int reg,
 	}
 	return 0;
 }
-
+*/
 static int smb347_read(struct smb347_charger *smb, u8 reg)
 {
 	int ret;
@@ -487,13 +488,13 @@ static int smb347_set_writable(struct smb347_charger *smb, bool writable)
 // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #if 1
 /* Convert register value to current using lookup table */
-static int hw_to_current(const unsigned int *tbl, size_t size, unsigned int val)
+/*static int hw_to_current(const unsigned int *tbl, size_t size, unsigned int val)
 {
 	if (val >= size)
 		return -EINVAL;
 	return tbl[val];
 }
-
+*/
 /* Convert current to register value using lookup table */
 static int current_to_hw(const unsigned int *tbl, size_t size, unsigned int val)
 {
@@ -601,12 +602,64 @@ static int cancel_soft_hot_temp_limit(struct smb347_charger *smb)
 }
 #endif
 
-struct lock_class_key *fg_psy;
-int check_batt_psy(struct power_supply *psy)
-{ // todo
-  return 0;
+static struct power_supply *fg_psy;
+/* check_batt_psy -check for whether power supply type is battery
+ * @dev : Power Supply dev structure
+ * @data : Power Supply Driver Data
+ * Context: can sleep
+ *
+ * Return true if power supply type is battery
+ *
+ */
+static int check_batt_psy(struct device *dev, void *data)
+{	
+	struct power_supply *psy = dev_get_drvdata(dev);
+
+	/* check for whether power supply type is battery */
+	if (psy->type == POWER_SUPPLY_TYPE_BATTERY) {
+		fg_psy = psy;
+		return 1;
+	}
+	return 0;
 }
 
+/*
+ * get_fg_chip_psy - identify the Fuel Gauge Power Supply device
+ * Context: can sleep
+ *
+ * Return Fuel Gauge power supply structure
+ */
+static struct power_supply *get_fg_chip_psy(void)
+{
+	if (fg_psy)
+	return fg_psy;
+
+	/* loop through power supply class */
+	class_for_each_device(power_supply_class, NULL, NULL,
+		check_batt_psy);
+	return fg_psy;
+}
+
+/*
+ * fg_chip_get_property - read a power supply property from Fuel Gauge driver
+ * @psp : Power Supply property
+ *
+ * Return power supply property value
+ */
+static int fg_chip_get_property(enum power_supply_property psp)
+{
+	union power_supply_propval val;
+	int ret = -ENODEV;
+	if (!fg_psy)
+		fg_psy = get_fg_chip_psy();
+
+	if (fg_psy) {
+		ret = fg_psy->get_property(fg_psy, psp, &val);
+		if (!ret)
+			return val.intval;
+	}
+	return ret;
+}
 
 #if 1
 /*
@@ -715,7 +768,6 @@ static int smb347_update_online(struct smb347_charger *smb)
 			dev_err(&smb->client->dev,
 				"failed to enable charging\n");
 	} else {
-		ret = smb347_charging_disable(smb);
 		if (ret < 0)
 			dev_err(&smb->client->dev,
 				"failed to disable charging\n");
@@ -1186,9 +1238,17 @@ static int smb347_set_temp_limits(struct smb347_charger *smb)
 static int smb347_hw_init(struct smb347_charger *smb)
 {
 	int ret;
-// ramos kernel actually tries to detect "smb347_susp" if inok_gpio < 0
-gpio_direction_output(smb->pdata->inok_gpio, 1);
-msleep(20);
+
+	if (smb->pdata->susp_gpio>=0) {
+	  ret=gpio_request(smb->pdata->susp_gpio,"smb347_susp");
+	  if (ret!=0) {
+	    pr_info("Error request smb347_susp gpio\n");
+            return ret;
+	 }
+          gpio_direction_output(smb->pdata->susp_gpio, 1);
+          msleep(20);
+
+	}
 
 	ret = smb347_set_writable(smb, true);
 	if (ret < 0)
@@ -1345,7 +1405,7 @@ fail:
 }
 #endif
 
-#if SMB347_INTERRUPT
+#if 0
 static irqreturn_t smb347_interrupt(int irq, void *data)
 {
 	struct smb347_charger *smb = data;
@@ -1393,10 +1453,8 @@ static irqreturn_t smb347_interrupt(int irq, void *data)
 		dev_err(&smb->client->dev,
 			"****** charging stopped due to charger error ******\n");
 
-#if 1
 		if (smb->pdata->show_battery)
 			power_supply_changed(&smb->battery);
-#endif
 
 		ret = IRQ_HANDLED;
 	}
@@ -1409,9 +1467,7 @@ static irqreturn_t smb347_interrupt(int irq, void *data)
 	if (irqstat_c & (IRQSTAT_C_TERMINATION_IRQ | IRQSTAT_C_TAPER_IRQ)) {
 		if ((irqstat_c & IRQSTAT_C_TERMINATION_STAT) &&
 						smb->pdata->show_battery)
-#if 1
 			power_supply_changed(&smb->battery);
-#endif
 		dev_info(&smb->client->dev,
 			"[Charge Terminated] Going to HW Maintenance mode\n");
 		ret = IRQ_HANDLED;
@@ -1427,10 +1483,8 @@ static irqreturn_t smb347_interrupt(int irq, void *data)
 		if (irqstat_d & IRQSTAT_D_CHARGE_TIMEOUT_STAT)
 			dev_info(&smb->client->dev,
 				"[Charge Timeout]:charging stopped\n");
-#if 1
 		if (smb->pdata->show_battery)
 			power_supply_changed(&smb->battery);
-#endif
 		ret = IRQ_HANDLED;
 	}
 
@@ -1440,13 +1494,11 @@ static irqreturn_t smb347_interrupt(int irq, void *data)
 	 */
 	if (irqstat_e & (IRQSTAT_E_USBIN_UV_IRQ | IRQSTAT_E_DCIN_UV_IRQ)) {
 		if (smb347_update_status(smb) > 0) {
-#if 1
 			smb347_update_online(smb);
 			if (smb->pdata->use_mains)
 				power_supply_changed(&smb->mains);
 			if (smb->pdata->use_usb)
 				power_supply_changed(&smb->usb);
-#endif
 		}
 
 		if (smb->mains_online || smb->usb_online)
@@ -1474,16 +1526,13 @@ static irqreturn_t smb347_interrupt(int irq, void *data)
 	return ret;
 }
 #endif
-
 static int smb347_irq_set(struct smb347_charger *smb, bool enable)
 {
 	int ret;
 
-#if 1
 	ret = smb347_set_writable(smb, true);
 	if (ret < 0)
 		return ret;
-#endif
 
 	/*
 	 * Enable/disable interrupts for:
@@ -1592,7 +1641,7 @@ static int smb347_inok_gpio_init(struct smb347_charger *smb)
 		CHR_info("smb347: config INOK gpio as IRQ fail!\n");
 		goto fail_gpio;
 	}
-
+//TODO!!
 	return 0;
 fail_gpio:
 	gpio_free(pdata->inok_gpio);
@@ -1611,7 +1660,7 @@ static inline int smb347_irq_disable(struct smb347_charger *smb)
 	return smb347_irq_set(smb, false);
 }
 
-#if SMB347_IRQ_INIT
+#if 0 && SMB347_IRQ_INIT
 static int smb347_irq_init(struct smb347_charger *smb)
 {
     int ret;
@@ -1726,24 +1775,40 @@ bool smb347_has_charger_error(void)
 int smb347_get_charging_status(void)
 {
 	int ret, status;
+	int capacity;
+	int current_now;
 
 	if (!smb347_dev)
 		return -EINVAL;
 
-#if 1
 	if (!smb347_is_online(smb347_dev))
 		return POWER_SUPPLY_STATUS_DISCHARGING;
-#endif
 
 	ret = smb347_read(smb347_dev, STAT_C);
 	if (ret < 0)
 		return ret;
 
-#if 1
 	dev_info(&smb347_dev->client->dev,
 			"Charging Status: STAT_C:0x%x\n", ret);
-#endif
 
+        capacity = fg_chip_get_property(POWER_SUPPLY_PROP_CAPACITY);
+	if (capacity == -ENODEV || capacity == -EINVAL) {
+		dev_err(&smb347_dev->client->dev,
+			"Can't read level from FG!\n");
+		return POWER_SUPPLY_HEALTH_UNSPEC_FAILURE;
+	}
+
+        current_now = fg_chip_get_property(POWER_SUPPLY_PROP_CURRENT_NOW);
+	if (current_now == -ENODEV || current_now == -EINVAL) {
+		dev_err(&smb347_dev->client->dev,
+			"Can't read curr from FG!\n");
+		return POWER_SUPPLY_HEALTH_UNSPEC_FAILURE;
+	}
+        if (capacity==100)
+		return POWER_SUPPLY_STATUS_FULL;
+
+
+//TODO!! 
 	if ((ret & STAT_C_CHARGER_ERROR) ||
 		(ret & STAT_C_HOLDOFF_STAT)) {
 		/* set to NOT CHARGING upon charger error
@@ -1942,7 +2007,7 @@ static int smb347_probe(struct i2c_client *client,
 
 	i2c_set_clientdata(client, smb);
 
-	__mutex_init(&smb->lock, "&smb->lock", fg_psy);
+	__mutex_init(&smb->lock, "&smb->lock", &fg_psy);
 
 #if 1
 	/* init wake lock */
@@ -1950,25 +2015,15 @@ static int smb347_probe(struct i2c_client *client,
 		WAKE_LOCK_SUSPEND, "smb347_wakelock");
 #endif
         // from ramos binary
-	void *gpadc = intel_mid_gpadc_alloc(1, 0x309);
+	smb->adc = intel_mid_gpadc_alloc(1, 0x309);
+        if (smb->adc==0) {
+	  pr_info("ADC allocation failed: Check if ADC driver came up\n");
+	}
 
-
-	/* enable register writing - chris */
-	ret = smb347_set_writable(smb, true);
-	if (ret < 0)
-		return ret;
-//	if( (hw_id_flag==0)&&(project_id_flag==0) ) {
-		// Refer to SMB347 Application Note 72 to solve serious problems - chris
-//		ret = smb347_masked_write(smb->client, OTG_TLIM_THERM_CNTRL_REG,
-//				OTG_CURRENT_LIMIT_AT_USBIN_MASK, OTG_CURRENT_LIMIT_250mA);
-//		if (ret < 0)
-//			return ret;
-//	}
-#if 1
 	ret = smb347_hw_init(smb);
 	if (ret < 0)
 		return ret;
-#endif
+	
 	if (smb->pdata->use_mains) {
 		smb->mains.name = "ac";
 		smb->mains.type = POWER_SUPPLY_TYPE_MAINS;
@@ -2017,15 +2072,8 @@ static int smb347_probe(struct i2c_client *client,
 	}
 #endif
 
-	/*request gpio and init it as output low*/
-//	ret = gpio_request(SMB358_OTG_CONTROL_PIN, "smb358_otg");
-//	if (ret < 0) {
-////		CHR_err("request SMB358 OTG CONTROL PIN(%d) fail, ret=%d\n", SMB358_OTG_CONTROL_PIN, ret);
-//	}
-//	gpio_direction_output(SMB358_OTG_CONTROL_PIN, 0);
-
 	/* Init Runtime PM State */
-	pm_runtime_put_noidle(&smb->client->dev);
+//	pm_runtime_put_noidle(&smb->client->dev);
 	pm_schedule_suspend(&smb->client->dev, MSEC_PER_SEC);
 
 	/* INOK pin configuration */
@@ -2050,13 +2098,8 @@ static int smb347_probe(struct i2c_client *client,
 	schedule_delayed_work(&smb->smb347_statmon_worker, 0);
 #endif
 
-//	cable_status_register_client(&cable_status_notifier2);
-//	wake_lock_init(&wakelock_cable, WAKE_LOCK_SUSPEND, "cable_wakelock");
-//	wake_lock_init(&wakelock_cable_t, WAKE_LOCK_SUSPEND, "cable_wakelock_timeout");
-
 	smb347_dev = smb;
-//  cable_status_notify2( NULL, query_cable_status(), dev);
-
+//TODO!! penwell_otg_query_power_supply_cap
 	if( smb347_get_charging_status() == POWER_SUPPLY_STATUS_CHARGING ) {
 		if (!wake_lock_active(&wakelock_cable)) {
 			CHR_info("%s: first status is charging, wake lock\n", __func__);

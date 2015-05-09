@@ -47,8 +47,9 @@ static struct smb347_charger_platform_data smb347_pdata = {
 	.otg_control			= SMB347_OTG_CONTROL_SW,
 	//.irq_gpio			= SMB347_IRQ_GPIO,
 #endif
-	.irq_gpio			= 93,
-	.inok_gpio			= 89,
+//	.irq_gpio			= 93,
+	.inok_gpio			= 93,
+	.susp_gpio			= 89,
 };
 
 void *smb347_platform_data(void *info)

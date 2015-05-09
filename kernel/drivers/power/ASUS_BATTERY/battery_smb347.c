@@ -1792,7 +1792,7 @@ static irqreturn_t smb347_interrupt(int irq, void *data)
 	pm_runtime_get_sync(&smb->client->dev);
 
 	dev_warn(&smb->client->dev, "%s\n", __func__);
-	if (gpio_get_value(smb->pdata->inok_gpio)) {
+/*	if (gpio_get_value(smb->pdata->inok_gpio)) {
 		dev_warn(&smb->client->dev, "%s: >>> INOK pin (HIGH) <<<\n", __func__);
 		if (wake_lock_active(&wakelock_cable)) {
 			CHR_info(" %s: wake unlock\n", __func__);
@@ -1808,7 +1808,7 @@ static irqreturn_t smb347_interrupt(int irq, void *data)
 			wake_lock(&wakelock_cable);
 		}
 	}
-
+*/
 	pm_runtime_put_sync(&smb->client->dev);
 	return ret;
 }
@@ -1999,7 +1999,7 @@ static int smb347_probe(struct i2c_client *client,
 	if (ret < 0)
 		return ret;
 	
-	if (smb->pdata->use_mains) {
+	if (0 && smb->pdata->use_mains) {
 		smb->mains.name = "ac";
 		smb->mains.type = POWER_SUPPLY_TYPE_MAINS;
 		smb->mains.get_property = smb347_mains_get_property;
@@ -2013,7 +2013,7 @@ static int smb347_probe(struct i2c_client *client,
 			return ret;
 	}
 
-	if (smb->pdata->use_usb) {
+	if (0 && smb->pdata->use_usb) {
 		smb->usb.name = "usb";
 		smb->usb.type = POWER_SUPPLY_TYPE_USB;
 		smb->usb.get_property = smb347_usb_get_property;

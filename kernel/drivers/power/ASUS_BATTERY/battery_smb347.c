@@ -175,7 +175,7 @@ struct smb347_charger {
 	struct power_supply	battery;
 	bool			mains_online;     // offset 0x270
 	bool			usb_online;       // offset 0x271
-	bool			charging_enabled;
+	bool			charging_enabled; // offset 0x272
 	bool			running;
 	struct dentry		*dentry;
 	struct usb_phy /*otg_transceiver*/	*otg;
@@ -388,6 +388,8 @@ static int check_batt_psy(struct device *dev, void *data)
 
 	/* check for whether power supply type is battery */
 	if (psy->type == POWER_SUPPLY_TYPE_BATTERY) {
+	        dev_info(&smb347_dev->client->dev,
+			"fg chip found:%s\n", psy->name);
 		fg_psy = psy;
 		return 1;
 	}
@@ -502,7 +504,7 @@ static int smb347_runtime_suspend(struct device *dev)
 	return 0;
 }
 
-
+// in ramos binary it gets &smb->client as 1rst paaram. compiler optimization
 static int smb347_read(struct smb347_charger *smb, u8 reg)
 {
 	int ret;
@@ -536,11 +538,12 @@ static int smb347_update_status(struct smb347_charger *smb)
 	 * Dc and usb are set depending on whether they are enabled in
 	 * platform data _and_ whether corresponding undervoltage is set.
 	 */
-	if (!smb->otg_enabled) {
+	if (smb->otg_enabled==0) {
 		if (smb->pdata->use_mains)
 			dc = !(ret & IRQSTAT_E_DCIN_UV_STAT);
 		if (smb->pdata->use_usb)
 			usb = !(ret & IRQSTAT_E_USBIN_UV_STAT);
+	        dc |= smb->charging_enabled; // from ramos binary
 	}
 
 	mutex_lock(&smb->lock);
@@ -647,12 +650,14 @@ static int smb347_otg_set(struct smb347_charger *smb, bool enable)
 		if (ret < 0)
 			goto out;
 
+		smb347_set_writable(smb, true); // from ramos binary
 		if (enable)
 			ret |= CMD_A_OTG_ENABLED;
 		else
 			ret &= ~CMD_A_OTG_ENABLED;
 
 		ret = smb347_write(smb, CMD_A, ret);
+		smb347_set_writable(smb, false); // from ramos binary
 		if (ret < 0)
 			goto out;
 	} else {
@@ -706,13 +711,57 @@ out:
 }
 
 int smb347_set_usb_suspend(struct smb347_charger *smb, bool enable)
-{ // TODO
-	return 0;
+{ 
+	int ret;
+	ret = smb347_read(smb, CMD_A);
+	if (ret < 0)
+		goto out;
+	if (enable!=0) {
+		smb->running = 1;
+		dev_info(&smb->client->dev,
+				"To set USB suspend.\n");
+		ret = smb347_write(smb, CMD_A, ret | 0x4);
+	} else {
+		smb->running = 0;
+		dev_info(&smb->client->dev,
+				"To set USB enabled.\n");
+		ret = smb347_write(smb, CMD_A, ret & 0xFB);
+		
+	}
+out:
+	return ret;
 }
 
-int smb347_set_usb_charge_mode(struct smb347_charger *smb, bool enable)
-{ // TODO
-	return 0;
+int smb347_set_usb_charge_mode(struct smb347_charger *smb, int mode)
+{ 
+	int ret;
+	ret = smb347_read(smb, CMD_B);
+
+        switch(mode) {
+	case 0:
+		ret &= 0xFC;
+		dev_info(&smb->client->dev,
+			"Set charge mode as USB100.\n");
+		break;
+	case 1:
+		ret &= 0xFE;
+		ret |= 0x2;
+		dev_info(&smb->client->dev,
+			"Set charge mode as USB500.\n");
+		break;
+	case 2:
+		ret |= 0x1;
+		dev_info(&smb->client->dev,
+			"Set charge mode as HC.\n");
+		break;
+	default:
+		dev_warn(&smb->client->dev,
+			"Unknown charge mode.Nothing to be done.\n");
+		break;
+	}
+	ret = smb347_write(smb, CMD_B, ret);
+	
+	return ret;
 }
 
 void smb347_debugfs_write(void)

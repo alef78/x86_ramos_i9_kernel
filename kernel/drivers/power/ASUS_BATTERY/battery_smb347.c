@@ -191,7 +191,8 @@ struct smb347_charger {
 	struct delayed_work	smb347_statmon_worker;
 	/* wake lock to prevent S3 during charging */
 	struct wake_lock wakelock;    // offset 0x308
-	void *adc; // do not know what is it
+	//bool unknown_flag; // offset 0x398
+	void *adc; // do not know what is it // offset 0x39c
 };
 
 static struct smb347_charger *smb347_dev;
@@ -1053,31 +1054,6 @@ static int ctp_adc_to_temp(uint16_t adc_val, int *tmp)
  *
  * Returns 0 if success else -1 or -ERANGE
  */
-/*static int ctp_read_adc_temp(int *tmp)
-{
-	int gpadc_sensor_val = 0;
-	int ret;
-	struct bq24192_chip *chip = i2c_get_clientdata(bq24192_client);
-
-	if (!chip->gpadc_handle) {
-		ret = -ENODEV;
-		goto read_adc_exit;
-	}
-
-	ret = intel_mid_gpadc_sample(chip->gpadc_handle,
-				CLT_GPADC_BPTHERM_SAMPLE_COUNT,
-				&gpadc_sensor_val);
-	if (ret) {
-		dev_err(&bq24192_client->dev,
-			"adc driver api returned error(%d)\n", ret);
-		goto read_adc_exit;
-	}
-
-	ret = ctp_adc_to_temp(gpadc_sensor_val, tmp);
-read_adc_exit:
-	return ret;
-}
-*/
 int ctp_get_battery_pack_temp(int *tmp)
 {
 	int ret;
@@ -1114,6 +1090,334 @@ errNotReady:
         return -EINVAL;
 }
 
+int ctp_get_battery_health(void)
+{ // TODO
+	return 0;
+}
+
+static int smb347_otg_notifier(struct notifier_block *nb, unsigned long event,
+			       void *param)
+{
+	struct smb347_charger *smb =
+		container_of(nb, struct smb347_charger, otg_nb);
+	struct smb347_otg_event *evt;
+
+	dev_dbg(&smb->client->dev, "OTG notification: %lu\n", event);
+	if (!param || event != USB_EVENT_DRIVE_VBUS || !smb->running)
+		return NOTIFY_DONE;
+
+	evt = kzalloc(sizeof(*evt), GFP_ATOMIC);
+	if (!evt) {
+		dev_err(&smb->client->dev,
+			"failed to allocate memory for OTG event\n");
+		return NOTIFY_DONE;
+	}
+
+	evt->param = *(bool *)param;
+	INIT_LIST_HEAD(&evt->node);
+
+	spin_lock(&smb->otg_queue_lock);
+	list_add_tail(&evt->node, &smb->otg_queue);
+	spin_unlock(&smb->otg_queue_lock);
+
+	queue_work(system_nrt_wq, &smb->otg_work);
+	return NOTIFY_OK;
+}
+
+void smb347_shutdown(struct i2c_client *client)
+{
+	struct smb347_charger *smb = i2c_get_clientdata(client);
+	dev_info(&client->dev, "%s\n", __func__);
+//TODO!
+	/* Disable OTG during shutdown */
+#if 0
+	if (smb)
+		smb347_otg_drive_vbus(smb, false);
+#endif
+
+	return;
+}
+
+/**
+ * smb347_status_monitor - worker function to monitor status
+ * @work: delayed work handler structure
+ * Context: Can sleep
+ *
+ * Monitors status of the charger and updates the charging status.
+ * Note: This worker is manily added to notify the user space about
+ * capacity, health and status chnages.
+ */
+static void smb347_status_monitor(struct work_struct *work)
+{
+	struct smb347_charger *smb = container_of(work,
+			struct smb347_charger, smb347_statmon_worker.work);
+	int ret;
+	int ocv;
+	int voltage;
+	int temp;
+	int charge;
+	int charge_full;
+	int level;
+	int curr;
+
+	pm_runtime_get_sync(&smb->client->dev);
+
+	ret = smb347_update_status(smb);
+	if (ret < 0)
+		dev_err(&smb->client->dev, "error in updating smb347 status\n");
+
+	ocv = fg_chip_get_property(POWER_SUPPLY_PROP_VOLTAGE_OCV);
+	if (ocv == -EINVAL || ocv == -ENODEV) {
+		dev_err(&smb->client->dev, "Can't read ocv from FG\n");
+		return;
+	}
+	voltage = fg_chip_get_property(POWER_SUPPLY_PROP_VOLTAGE_NOW);
+	if (voltage == -EINVAL || voltage == -ENODEV) {
+		dev_err(&smb->client->dev, "Can't read voltage from FG\n");
+		return;
+	}
+	temp = fg_chip_get_property(POWER_SUPPLY_PROP_TEMP);
+	if (temp == -EINVAL || temp == -ENODEV) {
+		dev_err(&smb->client->dev, "Can't read temp from FG\n");
+		return;
+	}
+	charge = fg_chip_get_property(POWER_SUPPLY_PROP_CHARGE_NOW);
+	if (charge == -EINVAL || charge == -ENODEV) {
+		dev_err(&smb->client->dev, "Can't read charge from FG\n");
+		return;
+	}
+	charge_full = fg_chip_get_property(POWER_SUPPLY_PROP_CHARGE_FULL);
+	if (charge_full == -EINVAL || charge_full == -ENODEV) {
+		dev_err(&smb->client->dev, "Can't read charge_full from FG\n");
+		return;
+	}
+	level = fg_chip_get_property(POWER_SUPPLY_PROP_CAPACITY);
+	if (level == -EINVAL || level == -ENODEV) {
+		dev_err(&smb->client->dev, "Can't read level from FG\n");
+		return;
+	}
+	curr = fg_chip_get_property(POWER_SUPPLY_PROP_CURRENT_NOW);
+	if (curr == -EINVAL || curr == -ENODEV) {
+		dev_err(&smb->client->dev, "Can't read curr from FG\n");
+		return;
+	}
+ 	// TODO
+	dev_info(&smb->client->dev, 
+	"\n%s: temp=%d vbatt=%d ocv=%d chrg_now=%d chrg_full=%d\nbatt_level=%d, current_now=%d(mA)\nBPTHERM= %d[%d,%d]\n", temp, ocv, charge, charge_full,
+	level, curr, 32, 32, 32);
+  
+	if (smb->pdata->use_mains)
+		power_supply_changed(&smb->mains);
+	if (smb->pdata->use_usb)
+		power_supply_changed(&smb->usb);
+	schedule_delayed_work(&smb->smb347_statmon_worker,
+						STATUS_UPDATE_INTERVAL);
+	pm_runtime_put_sync(&smb->client->dev);
+}
+
+void smb347_charging_port_changed(void)
+{
+	//TODO
+}
+
+void smb347_event_worker(void)
+{ // TODO
+}
+
+static inline int smb347_charging_enable(struct smb347_charger *smb)
+{
+	/* prevent system from entering s3 while charger is connected */
+	if (!wake_lock_active(&smb->wakelock))
+		wake_lock(&smb->wakelock);
+	return smb347_charging_set(smb, true);
+}
+
+static inline int smb347_charging_disable(struct smb347_charger *smb)
+{
+	int ret;
+
+	ret = smb347_charging_set(smb, false);
+	/* release the wake lock when charger is unplugged */
+	if (wake_lock_active(&smb->wakelock))
+		wake_unlock(&smb->wakelock);
+
+	return ret;
+}
+
+static int smb347_update_online(struct smb347_charger *smb)
+{
+	int ret;
+
+	/*
+	 * Depending on whether valid power source is connected or not, we
+	 * disable or enable the charging. We do it manually because it
+	 * depends on how the platform has configured the valid inputs.
+	 */
+	if (smb347_is_online(smb)) {
+	//        if (smb->unknown_flag & 1==0) {
+	//		__pm_stay_awake(&smb->wakelock);	
+	//	}
+		ret = smb347_charging_enable(smb);
+		if (ret < 0)
+			dev_err(&smb->client->dev,
+				"failed to enable charging\n");
+	} else {
+	//        if (smb->unknown_flag & 1!=0) {
+	//		__pm_relax(&smb->wakelock);	
+	//	}
+		ret = smb347_charging_disable(smb);
+		if (ret < 0)
+			dev_err(&smb->client->dev,
+				"failed to disable charging\n");
+	}
+
+	return ret;
+}
+
+static void smb347_complete(struct device *dev)
+{
+	struct smb347_charger *smb = dev_get_drvdata(dev);
+
+	if (smb->client->irq > 0)
+		enable_irq(smb->client->irq);
+
+	/* check if the wakeup is due to charger connect */
+	if (smb347_update_status(smb) > 0) {
+		smb347_update_online(smb);
+		if (smb->mains_online || smb->usb_online)
+			dev_info(&smb->client->dev,
+				"wakeup due to charger connect\n");
+		else	/* most unlkely to happen */
+			dev_info(&smb->client->dev,
+				"wake up due to charger disconnect\n");
+	}
+
+	/* Start the status monitoring worker */
+	schedule_delayed_work(&smb->smb347_statmon_worker,
+					msecs_to_jiffies(500));
+
+	dev_info(&smb->client->dev, "smb347 resume\n");
+}
+
+static irqreturn_t smb347_interrupt(int irq, void *data)
+{
+	struct smb347_charger *smb = data;
+	int stat_c, irqstat_c, irqstat_d, irqstat_e, irqstat_f;
+	irqreturn_t ret = IRQ_NONE;
+
+	pm_runtime_get_sync(&smb->client->dev);
+	dev_warn(&smb->client->dev, "%s\n", __func__);
+
+	stat_c = smb347_read(smb, STAT_C);
+	if (stat_c < 0) {
+		dev_warn(&smb->client->dev, "reading STAT_C failed\n");
+		return IRQ_NONE;
+	}
+
+	irqstat_c = smb347_read(smb, IRQSTAT_C);
+	if (irqstat_c < 0) {
+		dev_warn(&smb->client->dev, "reading IRQSTAT_C failed\n");
+		return IRQ_NONE;
+	}
+
+	irqstat_d = smb347_read(smb, IRQSTAT_D);
+	if (irqstat_d < 0) {
+		dev_warn(&smb->client->dev, "reading IRQSTAT_D failed\n");
+		return IRQ_NONE;
+	}
+
+	irqstat_e = smb347_read(smb, IRQSTAT_E);
+	if (irqstat_e < 0) {
+		dev_warn(&smb->client->dev, "reading IRQSTAT_E failed\n");
+		return IRQ_NONE;
+	}
+
+	irqstat_f = smb347_read(smb, IRQSTAT_F);
+	if (irqstat_f < 0) {
+		dev_warn(&smb->client->dev, "reading IRQSTAT_F failed\n");
+		return IRQ_NONE;
+	}
+
+	/*
+	 * If we get charger error we report the error back to user.
+	 * If the error is recovered charging will resume again.
+	 */
+	if (stat_c & STAT_C_CHARGER_ERROR) {
+		dev_err(&smb->client->dev,
+			"****** charging stopped due to charger error ******\n");
+
+		if (smb->pdata->show_battery)
+			power_supply_changed(&smb->battery);
+
+		ret = IRQ_HANDLED;
+	}
+
+	/*
+	 * If we reached the termination current the battery is charged and
+	 * we can update the status now. Charging is automatically
+	 * disabled by the hardware.
+	 */
+	if (irqstat_c & (IRQSTAT_C_TERMINATION_IRQ | IRQSTAT_C_TAPER_IRQ)) {
+		if ((irqstat_c & IRQSTAT_C_TERMINATION_STAT) &&
+						smb->pdata->show_battery)
+			power_supply_changed(&smb->battery);
+		dev_info(&smb->client->dev,
+			"[Charge Terminated] Going to HW Maintenance mode\n");
+		ret = IRQ_HANDLED;
+	}
+
+	/*
+	 * If we got a complete charger timeout int that means the charge
+	 * full is not detected with in charge timeout value.
+	 */
+	if (irqstat_d & IRQSTAT_D_CHARGE_TIMEOUT_IRQ) {
+		dev_info(&smb->client->dev,
+			"[Charge Timeout]:Total Charge Timeout INT recieved\n");
+		if (irqstat_d & IRQSTAT_D_CHARGE_TIMEOUT_STAT)
+			dev_info(&smb->client->dev,
+				"[Charge Timeout]:charging stopped\n");
+		if (smb->pdata->show_battery)
+			power_supply_changed(&smb->battery);
+		ret = IRQ_HANDLED;
+	}
+
+	/*
+	 * If we got an under voltage interrupt it means that AC/USB input
+	 * was connected or disconnected.
+	 */
+	if (irqstat_e & (IRQSTAT_E_USBIN_UV_IRQ | IRQSTAT_E_DCIN_UV_IRQ)) {
+		if (smb347_update_status(smb) > 0) {
+			smb347_update_online(smb);
+			if (smb->pdata->use_mains)
+				power_supply_changed(&smb->mains);
+			if (smb->pdata->use_usb)
+				power_supply_changed(&smb->usb);
+		}
+
+		if (smb->mains_online || smb->usb_online)
+			dev_info(&smb->client->dev, "Charger connected\n");
+		else
+			dev_info(&smb->client->dev, "Charger disconnected\n");
+
+		ret = IRQ_HANDLED;
+	}
+
+	/*
+	 * If the battery voltage falls below OTG UVLO the VBUS is
+	 * automatically turned off but we must not enable it again unless
+	 * UVLO is cleared. It will be cleared when external power supply
+	 * is connected and the battery voltage goes over the UVLO
+	 * threshold.
+	 */
+	if (irqstat_f & IRQSTAT_F_OTG_UV_IRQ) {
+		smb->otg_battery_uv = !!(irqstat_f & IRQSTAT_F_OTG_UV_STAT);
+		dev_info(&smb->client->dev, "Vbatt is below OTG UVLO\n");
+		ret = IRQ_HANDLED;
+	}
+
+	pm_runtime_put_sync(&smb->client->dev);
+	return ret;
+}
 static enum power_supply_property smb347_usb_properties[] = {
 	POWER_SUPPLY_PROP_ONLINE,
 };
@@ -1144,35 +1448,6 @@ static int current_to_hw(const unsigned int *tbl, size_t size, unsigned int val)
 }
 #endif
 
-/**
- * smb347_status_monitor - worker function to monitor status
- * @work: delayed work handler structure
- * Context: Can sleep
- *
- * Monitors status of the charger and updates the charging status.
- * Note: This worker is manily added to notify the user space about
- * capacity, health and status chnages.
- */
-static void smb347_status_monitor(struct work_struct *work)
-{
-	struct smb347_charger *smb = container_of(work,
-			struct smb347_charger, smb347_statmon_worker.work);
-	int ret;
-
-	pm_runtime_get_sync(&smb->client->dev);
-
-	ret = smb347_update_status(smb);
-	if (ret < 0)
-		dev_err(&smb->client->dev, "error in updating smb347 status\n");
-
-	if (smb->pdata->use_mains)
-		power_supply_changed(&smb->mains);
-	if (smb->pdata->use_usb)
-		power_supply_changed(&smb->usb);
-	schedule_delayed_work(&smb->smb347_statmon_worker,
-						STATUS_UPDATE_INTERVAL);
-	pm_runtime_put_sync(&smb->client->dev);
-}
 #endif
 
 #if CANCEL_SOFT_HOT_TEMP_LIMIT
@@ -1222,48 +1497,6 @@ static int smb347_charging_status(struct smb347_charger *smb)
 	return (ret & STAT_C_CHG_MASK) >> STAT_C_CHG_SHIFT;
 }
 
-static inline int smb347_charging_enable(struct smb347_charger *smb)
-{
-	/* prevent system from entering s3 while charger is connected */
-	if (!wake_lock_active(&smb->wakelock))
-		wake_lock(&smb->wakelock);
-	return smb347_charging_set(smb, true);
-}
-
-static inline int smb347_charging_disable(struct smb347_charger *smb)
-{
-	int ret;
-
-	ret = smb347_charging_set(smb, false);
-	/* release the wake lock when charger is unplugged */
-	if (wake_lock_active(&smb->wakelock))
-		wake_unlock(&smb->wakelock);
-
-	return ret;
-}
-
-static int smb347_update_online(struct smb347_charger *smb)
-{
-	int ret;
-
-	/*
-	 * Depending on whether valid power source is connected or not, we
-	 * disable or enable the charging. We do it manually because it
-	 * depends on how the platform has configured the valid inputs.
-	 */
-	if (smb347_is_online(smb)) {
-		ret = smb347_charging_enable(smb);
-		if (ret < 0)
-			dev_err(&smb->client->dev,
-				"failed to enable charging\n");
-	} else {
-		if (ret < 0)
-			dev_err(&smb->client->dev,
-				"failed to disable charging\n");
-	}
-
-	return ret;
-}
 
 static inline int smb347_otg_enable(struct smb347_charger *smb)
 {
@@ -1339,35 +1572,6 @@ static void smb347_otg_work(struct work_struct *work)
 		spin_lock_irqsave(&smb->otg_queue_lock, flags);
 	}
 	spin_unlock_irqrestore(&smb->otg_queue_lock, flags);
-}
-
-static int smb347_otg_notifier(struct notifier_block *nb, unsigned long event,
-			       void *param)
-{
-	struct smb347_charger *smb =
-		container_of(nb, struct smb347_charger, otg_nb);
-	struct smb347_otg_event *evt;
-
-	dev_dbg(&smb->client->dev, "OTG notification: %lu\n", event);
-	if (!param || event != USB_EVENT_DRIVE_VBUS || !smb->running)
-		return NOTIFY_DONE;
-
-	evt = kzalloc(sizeof(*evt), GFP_ATOMIC);
-	if (!evt) {
-		dev_err(&smb->client->dev,
-			"failed to allocate memory for OTG event\n");
-		return NOTIFY_DONE;
-	}
-
-	evt->param = *(bool *)param;
-	INIT_LIST_HEAD(&evt->node);
-
-	spin_lock(&smb->otg_queue_lock);
-	list_add_tail(&evt->node, &smb->otg_queue);
-	spin_unlock(&smb->otg_queue_lock);
-
-	queue_work(system_nrt_wq, &smb->otg_work);
-	return NOTIFY_OK;
 }
 
 static int smb347_set_charge_current(struct smb347_charger *smb)
@@ -1824,127 +2028,6 @@ fail:
 }
 #endif
 
-#if 0
-static irqreturn_t smb347_interrupt(int irq, void *data)
-{
-	struct smb347_charger *smb = data;
-	int stat_c, irqstat_c, irqstat_d, irqstat_e, irqstat_f;
-	irqreturn_t ret = IRQ_NONE;
-
-	pm_runtime_get_sync(&smb->client->dev);
-	dev_warn(&smb->client->dev, "%s\n", __func__);
-
-	stat_c = smb347_read(smb, STAT_C);
-	if (stat_c < 0) {
-		dev_warn(&smb->client->dev, "reading STAT_C failed\n");
-		return IRQ_NONE;
-	}
-
-	irqstat_c = smb347_read(smb, IRQSTAT_C);
-	if (irqstat_c < 0) {
-		dev_warn(&smb->client->dev, "reading IRQSTAT_C failed\n");
-		return IRQ_NONE;
-	}
-
-	irqstat_d = smb347_read(smb, IRQSTAT_D);
-	if (irqstat_d < 0) {
-		dev_warn(&smb->client->dev, "reading IRQSTAT_D failed\n");
-		return IRQ_NONE;
-	}
-
-	irqstat_e = smb347_read(smb, IRQSTAT_E);
-	if (irqstat_e < 0) {
-		dev_warn(&smb->client->dev, "reading IRQSTAT_E failed\n");
-		return IRQ_NONE;
-	}
-
-	irqstat_f = smb347_read(smb, IRQSTAT_F);
-	if (irqstat_f < 0) {
-		dev_warn(&smb->client->dev, "reading IRQSTAT_F failed\n");
-		return IRQ_NONE;
-	}
-
-	/*
-	 * If we get charger error we report the error back to user.
-	 * If the error is recovered charging will resume again.
-	 */
-	if (stat_c & STAT_C_CHARGER_ERROR) {
-		dev_err(&smb->client->dev,
-			"****** charging stopped due to charger error ******\n");
-
-		if (smb->pdata->show_battery)
-			power_supply_changed(&smb->battery);
-
-		ret = IRQ_HANDLED;
-	}
-
-	/*
-	 * If we reached the termination current the battery is charged and
-	 * we can update the status now. Charging is automatically
-	 * disabled by the hardware.
-	 */
-	if (irqstat_c & (IRQSTAT_C_TERMINATION_IRQ | IRQSTAT_C_TAPER_IRQ)) {
-		if ((irqstat_c & IRQSTAT_C_TERMINATION_STAT) &&
-						smb->pdata->show_battery)
-			power_supply_changed(&smb->battery);
-		dev_info(&smb->client->dev,
-			"[Charge Terminated] Going to HW Maintenance mode\n");
-		ret = IRQ_HANDLED;
-	}
-
-	/*
-	 * If we got a complete charger timeout int that means the charge
-	 * full is not detected with in charge timeout value.
-	 */
-	if (irqstat_d & IRQSTAT_D_CHARGE_TIMEOUT_IRQ) {
-		dev_info(&smb->client->dev,
-			"[Charge Timeout]:Total Charge Timeout INT recieved\n");
-		if (irqstat_d & IRQSTAT_D_CHARGE_TIMEOUT_STAT)
-			dev_info(&smb->client->dev,
-				"[Charge Timeout]:charging stopped\n");
-		if (smb->pdata->show_battery)
-			power_supply_changed(&smb->battery);
-		ret = IRQ_HANDLED;
-	}
-
-	/*
-	 * If we got an under voltage interrupt it means that AC/USB input
-	 * was connected or disconnected.
-	 */
-	if (irqstat_e & (IRQSTAT_E_USBIN_UV_IRQ | IRQSTAT_E_DCIN_UV_IRQ)) {
-		if (smb347_update_status(smb) > 0) {
-			smb347_update_online(smb);
-			if (smb->pdata->use_mains)
-				power_supply_changed(&smb->mains);
-			if (smb->pdata->use_usb)
-				power_supply_changed(&smb->usb);
-		}
-
-		if (smb->mains_online || smb->usb_online)
-			dev_info(&smb->client->dev, "Charger connected\n");
-		else
-			dev_info(&smb->client->dev, "Charger disconnected\n");
-
-		ret = IRQ_HANDLED;
-	}
-
-	/*
-	 * If the battery voltage falls below OTG UVLO the VBUS is
-	 * automatically turned off but we must not enable it again unless
-	 * UVLO is cleared. It will be cleared when external power supply
-	 * is connected and the battery voltage goes over the UVLO
-	 * threshold.
-	 */
-	if (irqstat_f & IRQSTAT_F_OTG_UV_IRQ) {
-		smb->otg_battery_uv = !!(irqstat_f & IRQSTAT_F_OTG_UV_STAT);
-		dev_info(&smb->client->dev, "Vbatt is below OTG UVLO\n");
-		ret = IRQ_HANDLED;
-	}
-
-	pm_runtime_put_sync(&smb->client->dev);
-	return ret;
-}
-#endif
 static int smb347_irq_set(struct smb347_charger *smb, bool enable)
 {
 	int ret;
@@ -2011,6 +2094,7 @@ fail:
 	return ret;
 }
 
+#if 0
 static irqreturn_t smb347_interrupt(int irq, void *data)
 {
 	struct smb347_charger *smb = data;
@@ -2040,6 +2124,7 @@ static irqreturn_t smb347_interrupt(int irq, void *data)
 	pm_runtime_put_sync(&smb->client->dev);
 	return ret;
 }
+#endif
 
 static int smb347_inok_gpio_init(struct smb347_charger *smb)
 {
@@ -2363,55 +2448,6 @@ static int smb347_remove(struct i2c_client *client)
 	gpio_free(SMB358_OTG_CONTROL_PIN);
 	return 0;
 }
-
-void smb347_shutdown(struct i2c_client *client)
-{
-	struct smb347_charger *smb = i2c_get_clientdata(client);
-	dev_info(&client->dev, "%s\n", __func__);
-
-	/* Disable OTG during shutdown */
-#if 0
-	if (smb)
-		smb347_otg_drive_vbus(smb, false);
-#endif
-
-	return;
-}
-
-#ifdef CONFIG_PM
-static void smb347_complete(struct device *dev)
-{
-	struct smb347_charger *smb = dev_get_drvdata(dev);
-
-	if (smb->client->irq > 0)
-		enable_irq(smb->client->irq);
-
-	/* check if the wakeup is due to charger connect */
-	if (smb347_update_status(smb) > 0) {
-#if 0
-		smb347_update_online(smb);
-#endif
-		if (smb->mains_online || smb->usb_online)
-			dev_info(&smb->client->dev,
-				"wakeup due to charger connect\n");
-		else	/* most unlkely to happen */
-			dev_info(&smb->client->dev,
-				"wake up due to charger disconnect\n");
-	}
-
-#if 1
-	/* Start the status monitoring worker */
-	schedule_delayed_work(&smb->smb347_statmon_worker,
-					msecs_to_jiffies(500));
-#endif
-
-	dev_info(&smb->client->dev, "smb347 resume\n");
-
-}
-#else
-#define smb347_prepare NULL
-#define smb347_complete NULL
-#endif
 
 static int smb347_suspend(struct device *dev)
 {

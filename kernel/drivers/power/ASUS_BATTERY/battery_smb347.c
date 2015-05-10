@@ -175,8 +175,10 @@ struct smb347_charger {
 	struct power_supply	battery;
 	bool			mains_online;     // offset 0x270
 	bool			usb_online;       // offset 0x271
-	bool			charging_enabled; // offset 0x272
-	bool			running;
+	bool                    someflag; // offset 0x272
+	bool                    usb_suspended; // offset 0x273
+	bool			charging_enabled; // offset 0x274
+	bool			running; // offset 0275
 	struct dentry		*dentry;
 	struct usb_phy /*otg_transceiver*/	*otg;
 	struct notifier_block	otg_nb;
@@ -543,7 +545,7 @@ static int smb347_update_status(struct smb347_charger *smb)
 			dc = !(ret & IRQSTAT_E_DCIN_UV_STAT);
 		if (smb->pdata->use_usb)
 			usb = !(ret & IRQSTAT_E_USBIN_UV_STAT);
-	        dc |= smb->charging_enabled; // from ramos binary
+	        dc |= smb->someflag; // from ramos binary
 	}
 
 	mutex_lock(&smb->lock);
@@ -710,19 +712,19 @@ out:
 	return ret;
 }
 
-int smb347_set_usb_suspend(struct smb347_charger *smb, bool enable)
+int smb347_set_usb_suspend(struct smb347_charger *smb, bool suspend)
 { 
 	int ret;
 	ret = smb347_read(smb, CMD_A);
 	if (ret < 0)
 		goto out;
-	if (enable!=0) {
-		smb->running = 1;
+	if (suspend!=0) {
+		smb->usb_suspended = 1;
 		dev_info(&smb->client->dev,
 				"To set USB suspend.\n");
 		ret = smb347_write(smb, CMD_A, ret | 0x4);
 	} else {
-		smb->running = 0;
+		smb->usb_suspended = 0;
 		dev_info(&smb->client->dev,
 				"To set USB enabled.\n");
 		ret = smb347_write(smb, CMD_A, ret & 0xFB);
@@ -765,7 +767,8 @@ int smb347_set_usb_charge_mode(struct smb347_charger *smb, int mode)
 }
 
 void smb347_debugfs_write(void)
-{ // TODO, params??
+{ // TODO, params?? 
+//looking at disassembly, it allows to write smb347 regs for debugging
 }
 
 static int smb347_charging_set(struct smb347_charger *smb, bool enable)
@@ -818,24 +821,6 @@ int smb347_get_charging_status(void)
 	dev_info(&smb347_dev->client->dev,
 			"Charging Status: STAT_C:0x%x\n", ret);
 
-        capacity = fg_chip_get_property(POWER_SUPPLY_PROP_CAPACITY);
-	if (capacity == -ENODEV || capacity == -EINVAL) {
-		dev_err(&smb347_dev->client->dev,
-			"Can't read level from FG!\n");
-		return POWER_SUPPLY_HEALTH_UNSPEC_FAILURE;
-	}
-
-        current_now = fg_chip_get_property(POWER_SUPPLY_PROP_CURRENT_NOW);
-	if (current_now == -ENODEV || current_now == -EINVAL) {
-		dev_err(&smb347_dev->client->dev,
-			"Can't read curr from FG!\n");
-		return POWER_SUPPLY_HEALTH_UNSPEC_FAILURE;
-	}
-        if (capacity==100)
-		return POWER_SUPPLY_STATUS_FULL;
-
-
-//TODO!! 
 	if ((ret & STAT_C_CHARGER_ERROR) ||
 		(ret & STAT_C_HOLDOFF_STAT)) {
 		/* set to NOT CHARGING upon charger error
@@ -843,6 +828,22 @@ int smb347_get_charging_status(void)
 		 */
 		status = POWER_SUPPLY_STATUS_NOT_CHARGING;
 	} else {
+        	capacity = fg_chip_get_property(POWER_SUPPLY_PROP_CAPACITY);
+		if (capacity == -ENODEV || capacity == -EINVAL) {
+			dev_err(&smb347_dev->client->dev,
+				"Can't read level from FG!\n");
+			return -EINVAL;//POWER_SUPPLY_HEALTH_UNSPEC_FAILURE;
+		}
+
+   		current_now = fg_chip_get_property(POWER_SUPPLY_PROP_CURRENT_NOW);
+		if (current_now == -ENODEV || current_now == -EINVAL) {
+			dev_err(&smb347_dev->client->dev,
+				"Can't read curr from FG!\n");
+			return -EINVAL;//POWER_SUPPLY_HEALTH_UNSPEC_FAILURE;
+		}
+        	if (capacity==100)
+			return POWER_SUPPLY_STATUS_FULL;
+
 		if ((ret & STAT_C_CHG_MASK) >> STAT_C_CHG_SHIFT) {
 			/* set to charging if battery is in pre-charge,
 			 * fast charge or taper charging mode.
@@ -933,6 +934,184 @@ static int smb347_battery_get_property(struct power_supply *psy,
 	}
 
 	return 0;
+}
+
+/*
+ * temperature v/s ADC value table to interpolate and calculate temp
+ */
+// fixme: do ramos use the same table? looks yes!
+#define CLT_BPTHERM_CURVE_MAX_SAMPLES	23
+#define CLT_BPTHERM_CURVE_MAX_VALUES	4
+int const ctp_bptherm_curve_data[CLT_BPTHERM_CURVE_MAX_SAMPLES]
+	[CLT_BPTHERM_CURVE_MAX_VALUES] = {
+	/* {temp_max, temp_min, adc_max, adc_min} */
+	{-15, -20, 977, 961},
+	{-10, -15, 961, 941},
+	{-5, -10, 941, 917},
+	{0, -5, 917, 887},
+	{5, 0, 887, 853},
+	{10, 5, 853, 813},
+	{15, 10, 813, 769},
+	{20, 15, 769, 720},
+	{25, 20, 720, 669},
+	{30, 25, 669, 615},
+	{35, 30, 615, 561},
+	{40, 35, 561, 508},
+	{45, 40, 508, 456},
+	{50, 45, 456, 407},
+	{55, 50, 407, 357},
+	{60, 55, 357, 315},
+	{65, 60, 315, 277},
+	{70, 65, 277, 243},
+	{75, 70, 243, 212},
+	{80, 75, 212, 186},
+	{85, 80, 186, 162},
+	{90, 85, 162, 140},
+	{100, 90, 140, 107},
+};
+
+#define CLT_BTP_ADC_MIN 107
+#define CLT_BTP_ADC_MAX 977
+/* Check for valid Temp ADC range */
+static bool ctp_is_valid_temp_adc(int adc_val)
+{
+	bool ret = false;
+
+	if (adc_val >= CLT_BTP_ADC_MIN && adc_val <= CLT_BTP_ADC_MAX)
+		ret = true;
+
+	return ret;
+}
+
+/* Temperature conversion Macros */
+static int ctp_conv_adc_temp(int adc_val,
+	int adc_max, int adc_diff, int temp_diff)
+{
+	int ret;
+
+	ret = (adc_max - adc_val) * temp_diff;
+	return ret / adc_diff;
+}
+
+/* Check if the adc value is in the curve sample range */
+static bool ctp_is_valid_temp_adc_range(int val, int min, int max)
+{
+	bool ret = false;
+	if (val > min && val <= max)
+		ret = true;
+	return ret;
+}
+
+/**
+ * ctp_adc_to_temp - convert ADC code to temperature
+ * @adc_val : ADC sensor reading
+ * @tmp : finally read temperature
+ *
+ * Returns 0 on success or -ERANGE in error case
+ */
+static int ctp_adc_to_temp(uint16_t adc_val, int *tmp)
+{
+	int temp = 0;
+	int i;
+
+	if (!ctp_is_valid_temp_adc(adc_val)) {
+		dev_warn(&smb347_dev->client->dev,
+			"Temperature out of Range: %u\n", adc_val);
+		return -ERANGE;
+	}
+
+	for (i = 0; i < CLT_BPTHERM_CURVE_MAX_SAMPLES; i++) {
+		/* linear approximation for battery pack temperature */
+		if (ctp_is_valid_temp_adc_range(
+			adc_val, ctp_bptherm_curve_data[i][3],
+			ctp_bptherm_curve_data[i][2])) {
+
+			temp = ctp_conv_adc_temp(adc_val,
+				  ctp_bptherm_curve_data[i][2],
+				  ctp_bptherm_curve_data[i][2] -
+				  ctp_bptherm_curve_data[i][3],
+				  ctp_bptherm_curve_data[i][0] -
+				  ctp_bptherm_curve_data[i][1]);
+
+			temp += ctp_bptherm_curve_data[i][1];
+			break;
+		}
+	}
+
+	if (i >= CLT_BPTHERM_CURVE_MAX_SAMPLES) {
+		dev_warn(&smb347_dev->client->dev, "Invalid temp adc range\n");
+		return -EINVAL;
+	}
+	*tmp = temp;
+
+	return 0;
+}
+
+/**
+ * ctp_read_adc_temp - read ADC sensor to get the temperature
+ * @tmp: op parameter where temperature get's read
+ *
+ * Returns 0 if success else -1 or -ERANGE
+ */
+/*static int ctp_read_adc_temp(int *tmp)
+{
+	int gpadc_sensor_val = 0;
+	int ret;
+	struct bq24192_chip *chip = i2c_get_clientdata(bq24192_client);
+
+	if (!chip->gpadc_handle) {
+		ret = -ENODEV;
+		goto read_adc_exit;
+	}
+
+	ret = intel_mid_gpadc_sample(chip->gpadc_handle,
+				CLT_GPADC_BPTHERM_SAMPLE_COUNT,
+				&gpadc_sensor_val);
+	if (ret) {
+		dev_err(&bq24192_client->dev,
+			"adc driver api returned error(%d)\n", ret);
+		goto read_adc_exit;
+	}
+
+	ret = ctp_adc_to_temp(gpadc_sensor_val, tmp);
+read_adc_exit:
+	return ret;
+}
+*/
+int ctp_get_battery_pack_temp(int *tmp)
+{
+	int ret;
+	int temp;
+	struct power_supply *psy;
+
+	if (!smb347_dev)
+		return -EINVAL;
+
+        psy = power_supply_get_by_name("smb347-mains");
+	if (psy==NULL)
+		goto errNotReady;
+        
+	psy = power_supply_get_by_name("smb347-usb");
+	if (psy==NULL)
+		goto errNotReady;
+
+        if (smb347_dev->adc==NULL) {
+		pr_info("get BPTHERM pin failed!\n");
+		return -ENODEV;
+	}
+
+	ret=intel_mid_gpadc_sample(smb347_dev->adc, 1, &temp);
+	if (ret!=0) {
+		dev_err(&smb347_dev->client->dev, 
+		  "adc driver api returned error(%d)\n", ret);
+		return ret;
+	}
+	ret = ctp_adc_to_temp(temp, tmp);
+	
+	return ret;	
+errNotReady:
+	pr_info("--  --Error:The charger driver interface is not ready.\n");
+        return -EINVAL;
 }
 
 static enum power_supply_property smb347_usb_properties[] = {

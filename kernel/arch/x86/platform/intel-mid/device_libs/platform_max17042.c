@@ -255,7 +255,7 @@ void *max17042_platform_data(void *info)
 
 	pdata.is_volt_shutdown_enabled = ctp_is_volt_shutdown_enabled;
 	pdata.get_vmin_threshold = ctp_get_vsys_min;
-	pdata.is_volt_shutdown = 1;
+	pdata.enable_current_sense = 1;
 	pdata.get_vmax_threshold = ctp_get_0level_batt_volt;
 	pdata.battery_status = smb347_get_charging_status;
 

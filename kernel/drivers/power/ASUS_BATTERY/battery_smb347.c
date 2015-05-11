@@ -1091,8 +1091,14 @@ errNotReady:
 }
 
 int ctp_get_battery_health(void)
-{ // TODO
-	return 0;
+{ 
+	int ret;
+	if (!smb347_dev) {
+		pr_info("-- %s --Error:The charger dev data is not ready.\n", __func__);
+		return 5;
+	}
+//TODO
+	return 1;
 }
 
 static int smb347_otg_notifier(struct notifier_block *nb, unsigned long event,
@@ -1203,8 +1209,8 @@ static void smb347_status_monitor(struct work_struct *work)
 	}
  	// TODO
 	dev_info(&smb->client->dev, 
-	"\n%s: temp=%d vbatt=%d ocv=%d chrg_now=%d chrg_full=%d\nbatt_level=%d, current_now=%d(mA)\nBPTHERM= %d[%d,%d]\n", temp, ocv, charge, charge_full,
-	level, curr, 32, 32, 32);
+	"\n%s: temp=%d vbatt=%d ocv=%d chrg_now=%d chrg_full=%d\nbatt_level=%d, current_now=%d(mA)\nBPTHERM= %d[%d,%d]\n", __func__, temp, ocv, charge, charge_full,
+	level, curr, 32, smb->pdata->bptherm_min, smb->pdata->bptherm_max);
   
 	if (smb->pdata->use_mains)
 		power_supply_changed(&smb->mains);
@@ -1215,7 +1221,8 @@ static void smb347_status_monitor(struct work_struct *work)
 	pm_runtime_put_sync(&smb->client->dev);
 }
 
-void smb347_charging_port_changed(void)
+void smb347_charging_port_changed(struct power_supply *psy,
+				struct power_supply_charger_cap *cap)
 {
 	//TODO
 }
@@ -1423,10 +1430,6 @@ static enum power_supply_property smb347_usb_properties[] = {
 };
 
 
-#if 1
-
-struct wake_lock wakelock_cable, wakelock_cable_t;
-// +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 /* Convert register value to current using lookup table */
 /*static int hw_to_current(const unsigned int *tbl, size_t size, unsigned int val)
 {
@@ -1445,8 +1448,6 @@ static int current_to_hw(const unsigned int *tbl, size_t size, unsigned int val)
 			break;
 	return i > 0 ? i - 1 : -EINVAL;
 }
-
-#endif
 
 #if 1
 /**
@@ -1897,17 +1898,15 @@ static int smb347_hw_init(struct smb347_charger *smb)
 	case SMB347_OTG_CONTROL_SW:
 	case SMB347_OTG_CONTROL_SW_PIN:
 	case SMB347_OTG_CONTROL_SW_AUTO:
-		smb->otg = usb_get_phy(USB_PHY_TYPE_USB2);//otg_get_transceiver();
+		smb->otg = usb_get_phy(USB_PHY_TYPE_USB2);
 		if (smb->otg) {
 			INIT_WORK(&smb->otg_work, smb347_otg_work);
 			INIT_LIST_HEAD(&smb->otg_queue);
 			spin_lock_init(&smb->otg_queue_lock);
 
 			smb->otg_nb.notifier_call = smb347_otg_notifier;
-			//ret = otg_register_notifier(smb->otg, &smb->otg_nb);
 			ret = atomic_notifier_chain_register(&smb->otg->notifier, &smb->otg_nb);
 			if (ret < 0) {
-				//otg_put_transceiver(smb->otg);
 				usb_put_phy(smb->otg);
 				smb->otg = NULL;
 				goto fail;
@@ -2061,38 +2060,7 @@ fail:
 	return ret;
 }
 
-#if 0
-static irqreturn_t smb347_interrupt(int irq, void *data)
-{
-	struct smb347_charger *smb = data;
-
-	irqreturn_t ret = IRQ_NONE;
-
-	pm_runtime_get_sync(&smb->client->dev);
-
-	dev_warn(&smb->client->dev, "%s\n", __func__);
-/*	if (gpio_get_value(smb->pdata->inok_gpio)) {
-		dev_warn(&smb->client->dev, "%s: >>> INOK pin (HIGH) <<<\n", __func__);
-		if (wake_lock_active(&wakelock_cable)) {
-			CHR_info(" %s: wake unlock\n", __func__);
-			wake_lock_timeout(&wakelock_cable_t, 3*HZ);
-			wake_unlock(&wakelock_cable);
-		}else
-			wake_lock_timeout(&wakelock_cable_t, 3*HZ);
-	}
-	else {
-		dev_warn(&smb->client->dev, "%s: >>> INOK pin (LOW) <<<\n", __func__);
-		if (!wake_lock_active(&wakelock_cable)) {
-			CHR_info(" %s: wake lock\n", __func__);
-			wake_lock(&wakelock_cable);
-		}
-	}
-*/
-	pm_runtime_put_sync(&smb->client->dev);
-	return ret;
-}
-#endif
-
+static inline int smb347_irq_enable(struct smb347_charger *smb);
 static int smb347_inok_gpio_init(struct smb347_charger *smb)
 {
 	const struct smb347_charger_platform_data *pdata = smb->pdata;
@@ -2100,23 +2068,57 @@ static int smb347_inok_gpio_init(struct smb347_charger *smb)
 
 	ret = gpio_request_one(pdata->inok_gpio, GPIOF_IN, smb->client->name);
 	if (ret < 0) {
-		CHR_info("smb347: request INOK gpio fail!\n");
+		dev_warn(&smb->client->dev,
+		  "failed to initialize IRQ: %d\n", ret);
 		goto fail;
 	}
 
 	ret = request_threaded_irq(irq, NULL, smb347_interrupt,
-					IRQF_TRIGGER_FALLING | IRQF_TRIGGER_RISING | IRQF_ONESHOT,
+					IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
 					smb->client->name,
 					smb);
 	if (ret < 0) {
-		CHR_info("smb347: config INOK gpio as IRQ fail!\n");
+		dev_warn(&smb->client->dev,
+		  "failed to initialize IRQ: %d\n", ret);
 		goto fail_gpio;
 	}
-//TODO!!
+	
+	ret = smb347_set_writable(smb, true);
+	if (ret < 0)
+		goto fail_irq;
+
+	/*
+	 * Configure the STAT output to be suitable for interrupts: disable
+	 * all other output (except interrupts) and make it active low.
+	 */
+	ret = smb347_read(smb, CFG_STAT);
+	if (ret < 0)
+		goto fail_readonly;
+
+	ret &= ~CFG_STAT_ACTIVE_HIGH;
+	ret |= CFG_STAT_DISABLED;
+
+	ret = smb347_write(smb, CFG_STAT, ret);
+	if (ret < 0)
+		goto fail_readonly;
+
+	ret = smb347_irq_enable(smb);
+	if (ret < 0)
+		goto fail_readonly;
+
+	smb347_set_writable(smb, false);
+	smb->client->irq = irq;
+	enable_irq_wake(smb->client->irq);
 	return 0;
+fail_readonly:
+	smb347_set_writable(smb, false);
+fail_irq:
+	free_irq(irq, smb);
 fail_gpio:
 	gpio_free(pdata->inok_gpio);
 fail:
+	dev_warn(&smb->client->dev,
+	  "disabling irq support\n");
 	smb->client->irq = 0;
 	return ret;
 }
@@ -2183,13 +2185,11 @@ static int smb347_irq_init(struct smb347_charger *smb)
 	return 0;
 
 fail_readonly:
-#if 1
 	smb347_set_writable(smb, false);
 fail_irq:
 	free_irq(irq, smb);
 fail_gpio:
 	gpio_free(pdata->irq_gpio);
-#endif
 fail:
 	smb->client->irq = 0;
 	return ret;
@@ -2199,24 +2199,6 @@ fail:
 static enum power_supply_property smb347_mains_properties[] = {
 	POWER_SUPPLY_PROP_ONLINE,
 };
-
-bool smb347_has_charger_error(void)
-{
-	int ret;
-
-	if (!smb347_dev)
-		return -EINVAL;
-
-	ret = smb347_read(smb347_dev, STAT_C);
-	if (ret < 0)
-		return true;
-
-	if (ret & STAT_C_CHARGER_ERROR)
-		return true;
-
-	return false;
-}
-
 
 static enum power_supply_property smb347_battery_properties[] = {
 	POWER_SUPPLY_PROP_STATUS,
@@ -2244,8 +2226,6 @@ static int smb347_probe(struct i2c_client *client,
 	struct smb347_charger *smb;
 	int ret;
 
-	//CHR_info("==== smb347_probe ====\n");
-
 	/*read project id first*/
 	pdata = dev->platform_data;
 	if (!pdata)
@@ -2261,6 +2241,7 @@ static int smb347_probe(struct i2c_client *client,
 	smb->pdata = pdata;
 
 	i2c_set_clientdata(client, smb);
+	smb347_dev = smb;
 
 	__mutex_init(&smb->lock, "&smb->lock", &fg_psy);
 
@@ -2278,7 +2259,7 @@ static int smb347_probe(struct i2c_client *client,
 		return ret;
 	
 	if (smb->pdata->use_mains) {
-		smb->mains.name = "ac";
+		smb->mains.name = "smb347-mains";
 		smb->mains.type = POWER_SUPPLY_TYPE_MAINS;
 		smb->mains.get_property = smb347_mains_get_property;
 		smb->mains.properties = smb347_mains_properties;
@@ -2292,13 +2273,14 @@ static int smb347_probe(struct i2c_client *client,
 	}
 
 	if (0 && smb->pdata->use_usb) {
-		smb->usb.name = "usb";
+		smb->usb.name = "smb347-usb";
 		smb->usb.type = POWER_SUPPLY_TYPE_USB;
 		smb->usb.get_property = smb347_usb_get_property;
 		smb->usb.properties = smb347_usb_properties;
 		smb->usb.num_properties = ARRAY_SIZE(smb347_usb_properties);
 		smb->usb.supplied_to = smb347_power_supplied_to;
 		smb->usb.num_supplicants = ARRAY_SIZE(smb347_power_supplied_to);
+		smb->usb.charging_port_changed = smb347_charging_port_changed;
 		ret = power_supply_register(dev, &smb->usb);
 		if (ret < 0) {
 			if (smb->pdata->use_mains)
@@ -2322,9 +2304,9 @@ static int smb347_probe(struct i2c_client *client,
 			return ret;
 		}
 	}
-
+//TODO
 	/* Init Runtime PM State */
-//	pm_runtime_put_noidle(&smb->client->dev);
+	pm_runtime_put_noidle(&smb->client->dev);
 	pm_schedule_suspend(&smb->client->dev, MSEC_PER_SEC);
 
 	/* INOK pin configuration */
@@ -2334,29 +2316,18 @@ static int smb347_probe(struct i2c_client *client,
 			dev_warn(dev, "failed to initialize INOK gpio: %d\n", ret);
 		}
 	}
-
-#if 1
+//TODO - event worker init here
 	INIT_DEFERRABLE_WORK(&smb->smb347_statmon_worker,
 						smb347_status_monitor);
-#endif
 
 	smb->running = true;
 	smb->dentry = debugfs_create_file("smb347-regs", S_IRUSR, NULL, smb,
 					  &smb347_debugfs_fops);
 
-#if 1
 	/* Start the status monitoring worker */
 	schedule_delayed_work(&smb->smb347_statmon_worker, 0);
-#endif
 
-	smb347_dev = smb;
 //TODO!! penwell_otg_query_power_supply_cap
-	if( smb347_get_charging_status() == POWER_SUPPLY_STATUS_CHARGING ) {
-		if (!wake_lock_active(&wakelock_cable)) {
-			CHR_info("%s: first status is charging, wake lock\n", __func__);
-			wake_lock(&wakelock_cable);
-		}
-	}
 	not_ready_flag = 0;
 	CHR_info("==== smb347_probe done ====\n");
 	return 0;

@@ -132,6 +132,8 @@ struct smb347_charger_platform_data {
 	int		soft_hot_temp_limit;
 	int		hard_cold_temp_limit;
 	int		hard_hot_temp_limit;
+	int		bptherm_min;
+	int 		bptherm_max;
 	bool		suspend_on_hard_temp_limit;
 	unsigned int	soft_temp_limit_compensation;
 	unsigned int	charge_current_compensation;

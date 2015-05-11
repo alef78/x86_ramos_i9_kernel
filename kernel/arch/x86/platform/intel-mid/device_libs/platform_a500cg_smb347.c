@@ -36,17 +36,17 @@ static struct smb347_charger_platform_data smb347_pdata = {
 	.soft_hot_temp_limit		= 50,
 	.hard_cold_temp_limit		= 5,
 	.hard_hot_temp_limit		= 55,
+	.bptherm_min 			= 0,
+	.bptherm_max			= 45,
 	.suspend_on_hard_temp_limit	= false,
 	.soft_temp_limit_compensation	= SMB347_SOFT_TEMP_COMPENSATE_CURRENT
 					| SMB347_SOFT_TEMP_COMPENSATE_VOLTAGE,
 	.charge_current_compensation	= 900000,
 	.use_mains			= true,
 	.use_usb				= true,
-#if 1
 	.enable_control			= SMB347_CHG_ENABLE_PIN_ACTIVE_LOW,
 	.otg_control			= SMB347_OTG_CONTROL_SW,
 	//.irq_gpio			= SMB347_IRQ_GPIO,
-#endif
 //	.irq_gpio			= 93,
 	.inok_gpio			= 93,
 	.susp_gpio			= 89,

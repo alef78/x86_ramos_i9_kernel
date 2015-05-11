@@ -1158,13 +1158,7 @@ static void smb347_status_monitor(struct work_struct *work)
 	struct smb347_charger *smb = container_of(work,
 			struct smb347_charger, smb347_statmon_worker.work);
 	int ret;
-	int ocv;
-	int voltage;
-	int temp;
-	int charge;
-	int charge_full;
-	int level;
-	int curr;
+	int ocv, voltage, temp, charge, charge_full, level, curr, bptemp;
 
 	pm_runtime_get_sync(&smb->client->dev);
 
@@ -1207,10 +1201,17 @@ static void smb347_status_monitor(struct work_struct *work)
 		dev_err(&smb->client->dev, "Can't read curr from FG\n");
 		return;
 	}
+	ret = ctp_get_battery_pack_temp(&bptemp);
+	if (ret <0) {
+		dev_err(&smb->client->dev, "battery pack temp read fail: %d\n", ret);
+		return;
+	}
+
  	// TODO
 	dev_info(&smb->client->dev, 
-	"\n%s: temp=%d vbatt=%d ocv=%d chrg_now=%d chrg_full=%d\nbatt_level=%d, current_now=%d(mA)\nBPTHERM= %d[%d,%d]\n", __func__, temp, ocv, charge, charge_full,
-	level, curr, 32, smb->pdata->bptherm_min, smb->pdata->bptherm_max);
+	"\n%s: temp=%d vbatt=%d ocv=%d chrg_now=%d chrg_full=%d\nbatt_level=%d, current_now=%d(mA)\nBPTHERM= %d[%d,%d]\n", __func__, 
+	temp / 10, voltage / 1000, ocv / 1000, charge, charge_full,
+	level, curr / 1000, bptemp, smb->pdata->bptherm_min, smb->pdata->bptherm_max);
   
 	if (smb->pdata->use_mains)
 		power_supply_changed(&smb->mains);
@@ -2272,7 +2273,7 @@ static int smb347_probe(struct i2c_client *client,
 			return ret;
 	}
 
-	if (0 && smb->pdata->use_usb) {
+	if (smb->pdata->use_usb) {
 		smb->usb.name = "smb347-usb";
 		smb->usb.type = POWER_SUPPLY_TYPE_USB;
 		smb->usb.get_property = smb347_usb_get_property;
@@ -2324,10 +2325,11 @@ static int smb347_probe(struct i2c_client *client,
 	smb->dentry = debugfs_create_file("smb347-regs", S_IRUSR, NULL, smb,
 					  &smb347_debugfs_fops);
 
-	/* Start the status monitoring worker */
-	schedule_delayed_work(&smb->smb347_statmon_worker, 0);
-
 //TODO!! penwell_otg_query_power_supply_cap
+	/* Start the status monitoring worker */
+	//schedule_delayed_work(&smb->smb347_statmon_worker, 0);
+	schedule_delayed_work(&smb->smb347_statmon_worker, 30);
+
 	not_ready_flag = 0;
 	CHR_info("==== smb347_probe done ====\n");
 	return 0;

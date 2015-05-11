@@ -752,7 +752,9 @@ static int max17042_set_property(struct power_supply *psy,
 	}
 
 	mutex_unlock(&chip->batt_lock);
-//TODO 
+	
+	power_supply_changed(psy);
+
 	return ret;
 }
 
@@ -2072,6 +2074,8 @@ static int max17042_probe(struct i2c_client *client,
 
 	if (chip->pdata->enable_current_sense) {
 		dev_info(&chip->client->dev, "current sensing enabled\n");
+		max17042_write_reg(chip->client, MAX17042_CGAIN,
+						0x4000);
 		/* Initialize the chip with battery config data */
 		max17042_restore_conf_data(chip);
 	} else {

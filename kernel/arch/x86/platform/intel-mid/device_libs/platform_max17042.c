@@ -251,7 +251,7 @@ void *max17042_platform_data(void *info)
 	pdata.technology = 2;
 	pdata.is_init_done = 1;
 	pdata.battery_health = ctp_get_battery_health;
-	pdata.battery_pack_temp = ctp_get_battery_pack_temp;// not is ramos binary
+	//pdata.battery_pack_temp = ctp_get_battery_pack_temp;// not is ramos binary
 
 	pdata.is_volt_shutdown_enabled = ctp_is_volt_shutdown_enabled;
 	pdata.get_vmin_threshold = ctp_get_vsys_min;

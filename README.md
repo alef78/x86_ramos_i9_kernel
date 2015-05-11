@@ -11,3 +11,4 @@ Current status:
 kernel loads, boots to Android. usb, touchscreen, video, sound, mmc, sd card, power management,wifi,bluetooth,accelerometer sensor works ok. adb works. charging seems to work but needs testing
 known problems / todo list:
 1) camera sensors drivers (for ov2675 and ov5645) are not there yet.
+2) 2nd kexec from kexec'ed kernel crashes. seems to be some problem with pvr driver irq reinit.

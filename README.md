@@ -10,5 +10,4 @@ Some of this work can be useful on other x86 Intel Mid tablets.
 Current status:
 kernel loads, boots to Android. usb, touchscreen, video, sound, mmc, sd card, power management,wifi,bluetooth,accelerometer sensor works ok. adb works. charging seems to work but needs testing
 known problems / todo list:
-1) camera drivers are not there yet.
-2) max17047/smb347 charging needs testing.
+1) camera sensors drivers (for ov2675 and ov5645) are not there yet.

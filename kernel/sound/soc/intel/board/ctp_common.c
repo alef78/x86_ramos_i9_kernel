@@ -339,6 +339,8 @@ void headset_insert_poll(struct work_struct *work)
 	unsigned int mask = SND_JACK_HEADSET;
 
 	enable = gpio_get_value(gpio->gpio);
+	if (gpio->invert)
+		enable = !enable;
 	if (enable != 0) {
 		pr_err("%s:gpio status = 0x%d\n", __func__, enable);
 		return;
@@ -391,6 +393,8 @@ void headset_remove_poll(struct work_struct *work)
 	unsigned int mask = SND_JACK_HEADSET;
 
 	enable = gpio_get_value(gpio->gpio);
+	if (gpio->invert)
+		enable = !enable;
 	if (enable == 0) {
 		pr_err("%s:gpio status = 0x%d\n", __func__, enable);
 		return;

@@ -77,6 +77,8 @@ struct max17042_config_data {
 } __packed;
 
 struct max17042_platform_data {
+	bool valid_battery;
+	bool en_vmax_intr;
 	bool enable_current_sense;
 	bool is_init_done;
 	bool is_volt_shutdown;
@@ -85,8 +87,6 @@ struct max17042_platform_data {
 	bool file_sys_storage_enabled;
 	bool soc_intr_mode_enabled;
 	bool reset_chip;
-	bool valid_battery;
-	bool en_vmax_intr;
 	int technology;
 	int fg_algo_model; /* maxim chip algorithm model */
 	char battid[BATTID_LEN + 1];

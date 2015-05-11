@@ -146,5 +146,7 @@ struct smb347_charger_platform_data {
 };
 
 int smb347_get_charging_status(void);
+int ctp_get_battery_health(void);
+int ctp_get_battery_pack_temp(int *tmp);
 
 #endif /* SMB347_CHARGER_H */

@@ -1067,9 +1067,9 @@ int ctp_get_battery_pack_temp(int *tmp)
 	if (psy==NULL)
 		goto errNotReady;
         
-	psy = power_supply_get_by_name("smb347-usb");
-	if (psy==NULL)
-		goto errNotReady;
+//	psy = power_supply_get_by_name("smb347-usb");
+//	if (psy==NULL)
+//		goto errNotReady;
 
         if (smb347_dev->adc==NULL) {
 		pr_info("get BPTHERM pin failed!\n");
@@ -1427,7 +1427,6 @@ static enum power_supply_property smb347_usb_properties[] = {
 
 struct wake_lock wakelock_cable, wakelock_cable_t;
 // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-#if 1
 /* Convert register value to current using lookup table */
 /*static int hw_to_current(const unsigned int *tbl, size_t size, unsigned int val)
 {
@@ -1446,33 +1445,7 @@ static int current_to_hw(const unsigned int *tbl, size_t size, unsigned int val)
 			break;
 	return i > 0 ? i - 1 : -EINVAL;
 }
-#endif
 
-#endif
-
-#if CANCEL_SOFT_HOT_TEMP_LIMIT
-static int cancel_soft_hot_temp_limit(struct smb347_charger *smb)
-{
-	int ret;
-
-	/* ME371MG EVB/SR1 meet this problem that smb347 stop charging
-		when IC temperature is high up to Soft Hot Limit. But Battery
-		is not full charging. We disable this limitation.
-	*/
-
-	CHR_info("set soft hot temperature limit behavior to No Response\n");
-	ret = smb347_read(smb, CFG_THERM);
-	if (ret < 0)
-		return ret;
-
-	ret &= ~CFG_THERM_SOFT_HOT_COMPENSATION_MASK;
-
-	ret = smb347_write(smb, CFG_THERM, ret);
-	if (ret < 0)
-		return ret;
-
-        return ret;
-}
 #endif
 
 #if 1
@@ -2043,7 +2016,6 @@ static int smb347_irq_set(struct smb347_charger *smb, bool enable)
 	 *	- charger error
 	 */
 	if (enable) {
-#if 1
 		int val = CFG_FAULT_IRQ_DCIN_UV;
 
 		if (smb->otg)
@@ -2058,7 +2030,6 @@ static int smb347_irq_set(struct smb347_charger *smb, bool enable)
 		ret = smb347_write(smb, CFG_STATUS_IRQ, val);
 		if (ret < 0)
 			goto fail;
-#endif
 // Need charger error IRQ
 		ret = smb347_read(smb, CFG_PIN);
 		if (ret < 0)
@@ -2068,7 +2039,6 @@ static int smb347_irq_set(struct smb347_charger *smb, bool enable)
 
 		ret = smb347_write(smb, CFG_PIN, ret);
 	} else {
-#if 1
 		ret = smb347_write(smb, CFG_FAULT_IRQ, 0);
 		if (ret < 0)
 			goto fail;
@@ -2076,7 +2046,6 @@ static int smb347_irq_set(struct smb347_charger *smb, bool enable)
 		ret = smb347_write(smb, CFG_STATUS_IRQ, 0);
 		if (ret < 0)
 			goto fail;
-#endif
 // cancel charger error IRQ
 		ret = smb347_read(smb, CFG_PIN);
 		if (ret < 0)
@@ -2088,9 +2057,7 @@ static int smb347_irq_set(struct smb347_charger *smb, bool enable)
 	}
 
 fail:
-#if 1
 	smb347_set_writable(smb, false);
-#endif
 	return ret;
 }
 
@@ -2297,11 +2264,9 @@ static int smb347_probe(struct i2c_client *client,
 
 	__mutex_init(&smb->lock, "&smb->lock", &fg_psy);
 
-#if 1
 	/* init wake lock */
 	wake_lock_init(&smb->wakelock,
 		WAKE_LOCK_SUSPEND, "smb347_wakelock");
-#endif
         // from ramos binary
 	smb->adc = intel_mid_gpadc_alloc(1, 0x309);
         if (smb->adc==0) {
@@ -2312,7 +2277,7 @@ static int smb347_probe(struct i2c_client *client,
 	if (ret < 0)
 		return ret;
 	
-	if (0 && smb->pdata->use_mains) {
+	if (smb->pdata->use_mains) {
 		smb->mains.name = "ac";
 		smb->mains.type = POWER_SUPPLY_TYPE_MAINS;
 		smb->mains.get_property = smb347_mains_get_property;
@@ -2341,7 +2306,6 @@ static int smb347_probe(struct i2c_client *client,
 			return ret;
 		}
 	}
-#if 1
 	if (smb->pdata->show_battery) {
 		smb->battery.name = "smb347-battery";
 		smb->battery.type = POWER_SUPPLY_TYPE_BATTERY;
@@ -2358,7 +2322,6 @@ static int smb347_probe(struct i2c_client *client,
 			return ret;
 		}
 	}
-#endif
 
 	/* Init Runtime PM State */
 //	pm_runtime_put_noidle(&smb->client->dev);

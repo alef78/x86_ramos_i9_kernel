@@ -1547,6 +1547,7 @@ ov5645_s_config(struct v4l2_subdev *sd, int irq, void *platform_data)
 	dev->platform_data =
 	    (struct camera_sensor_platform_data *)platform_data;
 
+	dev->platform_data->platform_init(client);
 	ret = ov5645_s_power(sd, 1);
 	if (ret) {
 		dev_err(&client->dev, "power_ctrl failed");

@@ -1621,10 +1621,6 @@ static struct i2c_driver ov2675_driver = {
 
 static int init_ov2675(void)
 {
-
-//	if((intel_mid_get_board_id() & HW_BOARD_7_LTE))
-//		return 0;
-
 	return i2c_add_driver(&ov2675_driver);
 }
 

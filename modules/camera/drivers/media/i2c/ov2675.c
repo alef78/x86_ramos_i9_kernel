@@ -1,5 +1,5 @@
 /*
- * Support for OmniVision OV2722 1080p HD camera sensor.
+ * Support for OmniVision OV2675 1080p HD camera sensor.
  *
  * Copyright (c) 2013 Intel Corporation. All Rights Reserved.
  *
@@ -38,10 +38,10 @@
 #include <linux/io.h>
 #include <linux/intel_mid_hwid.h>
 
-#include "ov2722.h"
+#include "ov2675.h"
 
 /* i2c read/write stuff */
-static int ov2722_read_reg(struct i2c_client *client,
+static int ov2675_read_reg(struct i2c_client *client,
 			   u16 data_length, u16 reg, u16 *val)
 {
 	int err;
@@ -54,8 +54,8 @@ static int ov2722_read_reg(struct i2c_client *client,
 		return -ENODEV;
 	}
 
-	if (data_length != OV2722_8BIT && data_length != OV2722_16BIT
-					&& data_length != OV2722_32BIT) {
+	if (data_length != OV2675_8BIT && data_length != OV2675_16BIT
+					&& data_length != OV2675_32BIT) {
 		dev_err(&client->dev, "%s error, invalid data length\n",
 			__func__);
 		return -EINVAL;
@@ -88,9 +88,9 @@ static int ov2722_read_reg(struct i2c_client *client,
 
 	*val = 0;
 	/* high byte comes first */
-	if (data_length == OV2722_8BIT)
+	if (data_length == OV2675_8BIT)
 		*val = (u8)data[0];
-	else if (data_length == OV2722_16BIT)
+	else if (data_length == OV2675_16BIT)
 		*val = be16_to_cpu(*(u16 *)&data[0]);
 	else
 		*val = be32_to_cpu(*(u32 *)&data[0]);
@@ -98,7 +98,7 @@ static int ov2722_read_reg(struct i2c_client *client,
 	return 0;
 }
 
-static int ov2722_i2c_write(struct i2c_client *client, u16 len, u8 *data)
+static int ov2675_i2c_write(struct i2c_client *client, u16 len, u8 *data)
 {
 	struct i2c_msg msg;
 	const int num_msg = 1;
@@ -113,7 +113,7 @@ static int ov2722_i2c_write(struct i2c_client *client, u16 len, u8 *data)
 	return ret == num_msg ? 0 : -EIO;
 }
 
-static int ov2722_write_reg(struct i2c_client *client, u16 data_length,
+static int ov2675_write_reg(struct i2c_client *client, u16 data_length,
 							u16 reg, u16 val)
 {
 	int ret;
@@ -121,7 +121,7 @@ static int ov2722_write_reg(struct i2c_client *client, u16 data_length,
 	u16 *wreg = (u16 *)data;
 	const u16 len = data_length + sizeof(u16); /* 16-bit address + data */
 
-	if (data_length != OV2722_8BIT && data_length != OV2722_16BIT) {
+	if (data_length != OV2675_8BIT && data_length != OV2675_16BIT) {
 		dev_err(&client->dev,
 			"%s error, invalid data_length\n", __func__);
 		return -EINVAL;
@@ -130,15 +130,15 @@ static int ov2722_write_reg(struct i2c_client *client, u16 data_length,
 	/* high byte goes out first */
 	*wreg = cpu_to_be16(reg);
 
-	if (data_length == OV2722_8BIT) {
+	if (data_length == OV2675_8BIT) {
 		data[2] = (u8)(val);
 	} else {
-		/* OV2722_16BIT */
+		/* OV2675_16BIT */
 		u16 *wdata = (u16 *)&data[2];
 		*wdata = cpu_to_be16(val);
 	}
 
-	ret = ov2722_i2c_write(client, len, data);
+	ret = ov2675_i2c_write(client, len, data);
 	if (ret)
 		dev_err(&client->dev,
 			"write error: wrote 0x%x to offset 0x%x error %d",
@@ -148,7 +148,7 @@ static int ov2722_write_reg(struct i2c_client *client, u16 data_length,
 }
 
 /*
- * ov2722_write_reg_array - Initializes a list of OV2722 registers
+ * ov2675_write_reg_array - Initializes a list of OV2675 registers
  * @client: i2c driver client structure
  * @reglist: list of registers to be written
  *
@@ -156,14 +156,14 @@ static int ov2722_write_reg(struct i2c_client *client, u16 data_length,
  * are found in a row on the list, this function creates a buffer and sends
  * consecutive data in a single i2c_transfer().
  *
- * __ov2722_flush_reg_array, __ov2722_buf_reg_array() and
- * __ov2722_write_reg_is_consecutive() are internal functions to
- * ov2722_write_reg_array_fast() and should be not used anywhere else.
+ * __ov2675_flush_reg_array, __ov2675_buf_reg_array() and
+ * __ov2675_write_reg_is_consecutive() are internal functions to
+ * ov2675_write_reg_array_fast() and should be not used anywhere else.
  *
  */
 
-static int __ov2722_flush_reg_array(struct i2c_client *client,
-				    struct ov2722_write_ctrl *ctrl)
+static int __ov2675_flush_reg_array(struct i2c_client *client,
+				    struct ov2675_write_ctrl *ctrl)
 {
 	u16 size;
 
@@ -174,22 +174,22 @@ static int __ov2722_flush_reg_array(struct i2c_client *client,
 	ctrl->buffer.addr = cpu_to_be16(ctrl->buffer.addr);
 	ctrl->index = 0;
 
-	return ov2722_i2c_write(client, size, (u8 *)&ctrl->buffer);
+	return ov2675_i2c_write(client, size, (u8 *)&ctrl->buffer);
 }
 
-static int __ov2722_buf_reg_array(struct i2c_client *client,
-				  struct ov2722_write_ctrl *ctrl,
-				  const struct ov2722_reg *next)
+static int __ov2675_buf_reg_array(struct i2c_client *client,
+				  struct ov2675_write_ctrl *ctrl,
+				  const struct ov2675_reg *next)
 {
 	int size;
 	u16 *data16;
 
 	switch (next->type) {
-	case OV2722_8BIT:
+	case OV2675_8BIT:
 		size = 1;
 		ctrl->buffer.data[ctrl->index] = (u8)next->val;
 		break;
-	case OV2722_16BIT:
+	case OV2675_16BIT:
 		size = 2;
 		data16 = (u16 *)&ctrl->buffer.data[ctrl->index];
 		*data16 = cpu_to_be16((u16)next->val);
@@ -208,15 +208,15 @@ static int __ov2722_buf_reg_array(struct i2c_client *client,
 	 * Buffer cannot guarantee free space for u32? Better flush it to avoid
 	 * possible lack of memory for next item.
 	 */
-	if (ctrl->index + sizeof(u16) >= OV2722_MAX_WRITE_BUF_SIZE)
-		return __ov2722_flush_reg_array(client, ctrl);
+	if (ctrl->index + sizeof(u16) >= OV2675_MAX_WRITE_BUF_SIZE)
+		return __ov2675_flush_reg_array(client, ctrl);
 
 	return 0;
 }
 
-static int __ov2722_write_reg_is_consecutive(struct i2c_client *client,
-					     struct ov2722_write_ctrl *ctrl,
-					     const struct ov2722_reg *next)
+static int __ov2675_write_reg_is_consecutive(struct i2c_client *client,
+					     struct ov2675_write_ctrl *ctrl,
+					     const struct ov2675_reg *next)
 {
 	if (ctrl->index == 0)
 		return 1;
@@ -224,18 +224,18 @@ static int __ov2722_write_reg_is_consecutive(struct i2c_client *client,
 	return ctrl->buffer.addr + ctrl->index == next->reg;
 }
 
-static int ov2722_write_reg_array(struct i2c_client *client,
-				  const struct ov2722_reg *reglist)
+static int ov2675_write_reg_array(struct i2c_client *client,
+				  const struct ov2675_reg *reglist)
 {
-	const struct ov2722_reg *next = reglist;
-	struct ov2722_write_ctrl ctrl;
+	const struct ov2675_reg *next = reglist;
+	struct ov2675_write_ctrl ctrl;
 	int err;
 
 	ctrl.index = 0;
-	for (; next->type != OV2722_TOK_TERM; next++) {
-		switch (next->type & OV2722_TOK_MASK) {
-		case OV2722_TOK_DELAY:
-			err = __ov2722_flush_reg_array(client, &ctrl);
+	for (; next->type != OV2675_TOK_TERM; next++) {
+		switch (next->type & OV2675_TOK_MASK) {
+		case OV2675_TOK_DELAY:
+			err = __ov2675_flush_reg_array(client, &ctrl);
 			if (err)
 				return err;
 			msleep(next->val);
@@ -245,13 +245,13 @@ static int ov2722_write_reg_array(struct i2c_client *client,
 			 * If next address is not consecutive, data needs to be
 			 * flushed before proceed.
 			 */
-			if (!__ov2722_write_reg_is_consecutive(client, &ctrl,
+			if (!__ov2675_write_reg_is_consecutive(client, &ctrl,
 								next)) {
-				err = __ov2722_flush_reg_array(client, &ctrl);
+				err = __ov2675_flush_reg_array(client, &ctrl);
 				if (err)
 					return err;
 			}
-			err = __ov2722_buf_reg_array(client, &ctrl, next);
+			err = __ov2675_buf_reg_array(client, &ctrl, next);
 			if (err) {
 				dev_err(&client->dev, "%s: write error, aborted\n",
 					 __func__);
@@ -261,36 +261,36 @@ static int ov2722_write_reg_array(struct i2c_client *client,
 		}
 	}
 
-	return __ov2722_flush_reg_array(client, &ctrl);
+	return __ov2675_flush_reg_array(client, &ctrl);
 }
-static int ov2722_g_focal(struct v4l2_subdev *sd, s32 *val)
+static int ov2675_g_focal(struct v4l2_subdev *sd, s32 *val)
 {
-	*val = (OV2722_FOCAL_LENGTH_NUM << 16) | OV2722_FOCAL_LENGTH_DEM;
+	*val = (OV2675_FOCAL_LENGTH_NUM << 16) | OV2675_FOCAL_LENGTH_DEM;
 	return 0;
 }
 
-static int ov2722_g_fnumber(struct v4l2_subdev *sd, s32 *val)
+static int ov2675_g_fnumber(struct v4l2_subdev *sd, s32 *val)
 {
 	/*const f number for imx*/
-	*val = (OV2722_F_NUMBER_DEFAULT_NUM << 16) | OV2722_F_NUMBER_DEM;
+	*val = (OV2675_F_NUMBER_DEFAULT_NUM << 16) | OV2675_F_NUMBER_DEM;
 	return 0;
 }
 
-static int ov2722_g_fnumber_range(struct v4l2_subdev *sd, s32 *val)
+static int ov2675_g_fnumber_range(struct v4l2_subdev *sd, s32 *val)
 {
-	*val = (OV2722_F_NUMBER_DEFAULT_NUM << 24) |
-		(OV2722_F_NUMBER_DEM << 16) |
-		(OV2722_F_NUMBER_DEFAULT_NUM << 8) | OV2722_F_NUMBER_DEM;
+	*val = (OV2675_F_NUMBER_DEFAULT_NUM << 24) |
+		(OV2675_F_NUMBER_DEM << 16) |
+		(OV2675_F_NUMBER_DEFAULT_NUM << 8) | OV2675_F_NUMBER_DEM;
 	return 0;
 }
 
 
-static int ov2722_get_intg_factor(struct i2c_client *client,
+static int ov2675_get_intg_factor(struct i2c_client *client,
 				struct camera_mipi_info *info,
-				const struct ov2722_resolution *res)
+				const struct ov2675_resolution *res)
 {
 	struct v4l2_subdev *sd = i2c_get_clientdata(client);
-	struct ov2722_device *dev = to_ov2722_sensor(sd);
+	struct ov2675_device *dev = to_ov2675_sensor(sd);
 	struct atomisp_sensor_mode_data *buf = &info->data;
 	const unsigned int ext_clk_freq_hz = 19200000;
 	const unsigned int pll_invariant_div = 10;
@@ -305,18 +305,18 @@ static int ov2722_get_intg_factor(struct i2c_client *client,
 		return -EINVAL;
 
 	/* pixel clock calculattion */
-	ret =  ov2722_read_reg(client, OV2722_8BIT,
-				OV2722_SC_CMMN_PLL_CTRL3, &pre_pll_clk_div);
+	ret =  ov2675_read_reg(client, OV2675_8BIT,
+				OV2675_SC_CMMN_PLL_CTRL3, &pre_pll_clk_div);
 	if (ret)
 		return ret;
 
-	ret =  ov2722_read_reg(client, OV2722_8BIT,
-				OV2722_SC_CMMN_PLL_MULTIPLIER, &pll_multiplier);
+	ret =  ov2675_read_reg(client, OV2675_8BIT,
+				OV2675_SC_CMMN_PLL_MULTIPLIER, &pll_multiplier);
 	if (ret)
 		return ret;
 
-	ret =  ov2722_read_reg(client, OV2722_8BIT,
-				OV2722_SC_CMMN_PLL_DEBUG_OPT, &op_pix_clk_div);
+	ret =  ov2675_read_reg(client, OV2675_8BIT,
+				OV2675_SC_CMMN_PLL_DEBUG_OPT, &op_pix_clk_div);
 	if (ret)
 		return ret;
 
@@ -333,52 +333,52 @@ static int ov2722_get_intg_factor(struct i2c_client *client,
 	buf->vt_pix_clk_freq_mhz = pix_clk_freq_hz;
 
 	/* get integration time */
-	buf->coarse_integration_time_min = OV2722_COARSE_INTG_TIME_MIN;
+	buf->coarse_integration_time_min = OV2675_COARSE_INTG_TIME_MIN;
 	buf->coarse_integration_time_max_margin =
-					OV2722_COARSE_INTG_TIME_MAX_MARGIN;
+					OV2675_COARSE_INTG_TIME_MAX_MARGIN;
 
-	buf->fine_integration_time_min = OV2722_FINE_INTG_TIME_MIN;
+	buf->fine_integration_time_min = OV2675_FINE_INTG_TIME_MIN;
 	buf->fine_integration_time_max_margin =
-					OV2722_FINE_INTG_TIME_MAX_MARGIN;
+					OV2675_FINE_INTG_TIME_MAX_MARGIN;
 
-	buf->fine_integration_time_def = OV2722_FINE_INTG_TIME_MIN;
+	buf->fine_integration_time_def = OV2675_FINE_INTG_TIME_MIN;
 	buf->frame_length_lines = res->lines_per_frame;
 	buf->line_length_pck = res->pixels_per_line;
 	buf->read_mode = res->bin_mode;
 
 	/* get the cropping and output resolution to ISP for this mode. */
-	ret =  ov2722_read_reg(client, OV2722_16BIT,
-					OV2722_H_CROP_START_H, &reg_val);
+	ret =  ov2675_read_reg(client, OV2675_16BIT,
+					OV2675_H_CROP_START_H, &reg_val);
 	if (ret)
 		return ret;
 	buf->crop_horizontal_start = reg_val;
 
-	ret =  ov2722_read_reg(client, OV2722_16BIT,
-					OV2722_V_CROP_START_H, &reg_val);
+	ret =  ov2675_read_reg(client, OV2675_16BIT,
+					OV2675_V_CROP_START_H, &reg_val);
 	if (ret)
 		return ret;
 	buf->crop_vertical_start = reg_val;
 
-	ret = ov2722_read_reg(client, OV2722_16BIT,
-					OV2722_H_CROP_END_H, &reg_val);
+	ret = ov2675_read_reg(client, OV2675_16BIT,
+					OV2675_H_CROP_END_H, &reg_val);
 	if (ret)
 		return ret;
 	buf->crop_horizontal_end = reg_val;
 
-	ret = ov2722_read_reg(client, OV2722_16BIT,
-					OV2722_V_CROP_END_H, &reg_val);
+	ret = ov2675_read_reg(client, OV2675_16BIT,
+					OV2675_V_CROP_END_H, &reg_val);
 	if (ret)
 		return ret;
 	buf->crop_vertical_end = reg_val;
 
-	ret = ov2722_read_reg(client, OV2722_16BIT,
-					OV2722_H_OUTSIZE_H, &reg_val);
+	ret = ov2675_read_reg(client, OV2675_16BIT,
+					OV2675_H_OUTSIZE_H, &reg_val);
 	if (ret)
 		return ret;
 	buf->output_width = reg_val;
 
-	ret = ov2722_read_reg(client, OV2722_16BIT,
-					OV2722_V_OUTSIZE_H, &reg_val);
+	ret = ov2675_read_reg(client, OV2675_16BIT,
+					OV2675_V_OUTSIZE_H, &reg_val);
 	if (ret)
 		return ret;
 	buf->output_height = reg_val;
@@ -390,11 +390,11 @@ static int ov2722_get_intg_factor(struct i2c_client *client,
 	return 0;
 }
 
-static long __ov2722_set_exposure(struct v4l2_subdev *sd, int coarse_itg,
+static long __ov2675_set_exposure(struct v4l2_subdev *sd, int coarse_itg,
 				 int gain, int digitgain)
 
 {
-	struct ov2722_device *dev = to_ov2722_sensor(sd);
+	struct ov2675_device *dev = to_ov2675_sensor(sd);
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	u16 vts;
 	int frame_length;
@@ -402,8 +402,8 @@ static long __ov2722_set_exposure(struct v4l2_subdev *sd, int coarse_itg,
 	int temp;
 
 
-	ret = ov2722_read_reg(client, OV2722_16BIT,
-					OV2722_TIMING_VTS_H, &vts);
+	ret = ov2675_read_reg(client, OV2675_16BIT,
+					OV2675_TIMING_VTS_H, &vts);
 	if (ret)
 		return ret;
 
@@ -415,31 +415,31 @@ static long __ov2722_set_exposure(struct v4l2_subdev *sd, int coarse_itg,
 	digitgain <<= 2;
 
 	/* group hold start */
-	ret = ov2722_write_reg(client, OV2722_8BIT, OV2722_GROUP_ACCESS, 0);
+	ret = ov2675_write_reg(client, OV2675_8BIT, OV2675_GROUP_ACCESS, 0);
 	if (ret)
 		return ret;
 
-	ret = ov2722_write_reg(client, OV2722_16BIT,
-				OV2722_VTS_DIFF_H, frame_length);
+	ret = ov2675_write_reg(client, OV2675_16BIT,
+				OV2675_VTS_DIFF_H, frame_length);
 	if (ret)
 		return ret;
 
 	/* set exposure */
-	ret = ov2722_write_reg(client, OV2722_8BIT,
-					OV2722_AEC_PK_EXPO_L,
+	ret = ov2675_write_reg(client, OV2675_8BIT,
+					OV2675_AEC_PK_EXPO_L,
 					coarse_itg & 0xff);
 	if (ret)
 		return ret;
 
-	ret = ov2722_write_reg(client, OV2722_16BIT,
-					OV2722_AEC_PK_EXPO_H,
+	ret = ov2675_write_reg(client, OV2675_16BIT,
+					OV2675_AEC_PK_EXPO_H,
 					(coarse_itg >> 8) & 0xfff);
 	if (ret)
 		return ret;
 
 	/* set analog gain */
-	ret = ov2722_write_reg(client, OV2722_16BIT,
-					OV2722_AGC_ADJ_H, gain);
+	ret = ov2675_write_reg(client, OV2675_16BIT,
+					OV2675_AGC_ADJ_H, gain);
 	if (ret)
 		return ret;
 
@@ -449,8 +449,8 @@ static long __ov2722_set_exposure(struct v4l2_subdev *sd, int coarse_itg,
 		dev->pre_digitgain = digitgain;
 		temp = digitgain*(dev->R_gain)>>10;
 		if (temp >= 0x400){
-			ret = ov2722_write_reg(client, OV2722_16BIT,
-					OV2722_MWB_GAIN_R_H, temp);
+			ret = ov2675_write_reg(client, OV2675_16BIT,
+					OV2675_MWB_GAIN_R_H, temp);
 			if (ret)
 				return ret;
 		}
@@ -458,47 +458,47 @@ static long __ov2722_set_exposure(struct v4l2_subdev *sd, int coarse_itg,
 		temp = digitgain*(dev->G_gain)>>10;
 
 		if (temp >= 0x400){
-			ret = ov2722_write_reg(client, OV2722_16BIT,
-					OV2722_MWB_GAIN_G_H, temp);
+			ret = ov2675_write_reg(client, OV2675_16BIT,
+					OV2675_MWB_GAIN_G_H, temp);
 			if (ret)
 				return ret;
 		}
 
 		temp = digitgain*(dev->B_gain)>>10;
 		if (temp >= 0x400){
-			ret = ov2722_write_reg(client, OV2722_16BIT,
-					OV2722_MWB_GAIN_B_H, temp);
+			ret = ov2675_write_reg(client, OV2675_16BIT,
+					OV2675_MWB_GAIN_B_H, temp);
 			if (ret)
 				return ret;
 		}
 	}
 	/* group hold end */
-	ret = ov2722_write_reg(client, OV2722_8BIT,
-					OV2722_GROUP_ACCESS, 0x10);
+	ret = ov2675_write_reg(client, OV2675_8BIT,
+					OV2675_GROUP_ACCESS, 0x10);
 	if (ret)
 		return ret;
 
 	/* group hold launch */
-	ret = ov2722_write_reg(client, OV2722_8BIT,
-					OV2722_GROUP_ACCESS, 0xa0);
+	ret = ov2675_write_reg(client, OV2675_8BIT,
+					OV2675_GROUP_ACCESS, 0xa0);
 
 	return ret;
 }
 
-static int ov2722_set_exposure(struct v4l2_subdev *sd, int exposure,
+static int ov2675_set_exposure(struct v4l2_subdev *sd, int exposure,
 	int gain, int digitgain)
 {
-	struct ov2722_device *dev = to_ov2722_sensor(sd);
+	struct ov2675_device *dev = to_ov2675_sensor(sd);
 	int ret;
 
 	mutex_lock(&dev->input_lock);
-	ret = __ov2722_set_exposure(sd, exposure, gain, digitgain);
+	ret = __ov2675_set_exposure(sd, exposure, gain, digitgain);
 	mutex_unlock(&dev->input_lock);
 
 	return ret;
 }
 
-static long ov2722_s_exposure(struct v4l2_subdev *sd,
+static long ov2675_s_exposure(struct v4l2_subdev *sd,
 			       struct atomisp_exposure *exposure)
 {
 	int exp = exposure->integration_time[0];
@@ -512,15 +512,15 @@ static long ov2722_s_exposure(struct v4l2_subdev *sd,
 		return -EINVAL;
 	}
 
-	return ov2722_set_exposure(sd, exp, gain, digitgain);
+	return ov2675_set_exposure(sd, exp, gain, digitgain);
 }
 
-static long ov2722_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
+static long ov2675_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 {
 
 	switch (cmd) {
 	case ATOMISP_IOC_S_EXPOSURE:
-		return ov2722_s_exposure(sd, arg);
+		return ov2675_s_exposure(sd, arg);
 	default:
 		return -EINVAL;
 	}
@@ -529,28 +529,28 @@ static long ov2722_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 
 /* This returns the exposure time being used. This should only be used
    for filling in EXIF data, not for actual image processing. */
-static int ov2722_q_exposure(struct v4l2_subdev *sd, s32 *value)
+static int ov2675_q_exposure(struct v4l2_subdev *sd, s32 *value)
 {
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	u16 reg_v, reg_v2;
 	int ret;
 
 	/* get exposure */
-	ret = ov2722_read_reg(client, OV2722_8BIT,
-					OV2722_AEC_PK_EXPO_L,
+	ret = ov2675_read_reg(client, OV2675_8BIT,
+					OV2675_AEC_PK_EXPO_L,
 					&reg_v);
 	if (ret)
 		goto err;
 
-	ret = ov2722_read_reg(client, OV2722_8BIT,
-					OV2722_AEC_PK_EXPO_M,
+	ret = ov2675_read_reg(client, OV2675_8BIT,
+					OV2675_AEC_PK_EXPO_M,
 					&reg_v2);
 	if (ret)
 		goto err;
 
 	reg_v += reg_v2 << 8;
-	ret = ov2722_read_reg(client, OV2722_8BIT,
-					OV2722_AEC_PK_EXPO_H,
+	ret = ov2675_read_reg(client, OV2675_8BIT,
+					OV2675_AEC_PK_EXPO_H,
 					&reg_v2);
 	if (ret)
 		goto err;
@@ -559,7 +559,7 @@ static int ov2722_q_exposure(struct v4l2_subdev *sd, s32 *value)
 err:
 	return ret;
 }
-struct ov2722_control ov2722_controls[] = {
+struct ov2675_control ov2675_controls[] = {
 	{
 		.qc = {
 			.id = V4L2_CID_EXPOSURE_ABSOLUTE,
@@ -571,64 +571,64 @@ struct ov2722_control ov2722_controls[] = {
 			.default_value = 0x00,
 			.flags = 0,
 		},
-		.query = ov2722_q_exposure,
+		.query = ov2675_q_exposure,
 	},
 	{
 		.qc = {
 			.id = V4L2_CID_FOCAL_ABSOLUTE,
 			.type = V4L2_CTRL_TYPE_INTEGER,
 			.name = "focal length",
-			.minimum = OV2722_FOCAL_LENGTH_DEFAULT,
-			.maximum = OV2722_FOCAL_LENGTH_DEFAULT,
+			.minimum = OV2675_FOCAL_LENGTH_DEFAULT,
+			.maximum = OV2675_FOCAL_LENGTH_DEFAULT,
 			.step = 0x01,
-			.default_value = OV2722_FOCAL_LENGTH_DEFAULT,
+			.default_value = OV2675_FOCAL_LENGTH_DEFAULT,
 			.flags = 0,
 		},
-		.query = ov2722_g_focal,
+		.query = ov2675_g_focal,
 	},
 	{
 		.qc = {
 			.id = V4L2_CID_FNUMBER_ABSOLUTE,
 			.type = V4L2_CTRL_TYPE_INTEGER,
 			.name = "f-number",
-			.minimum = OV2722_F_NUMBER_DEFAULT,
-			.maximum = OV2722_F_NUMBER_DEFAULT,
+			.minimum = OV2675_F_NUMBER_DEFAULT,
+			.maximum = OV2675_F_NUMBER_DEFAULT,
 			.step = 0x01,
-			.default_value = OV2722_F_NUMBER_DEFAULT,
+			.default_value = OV2675_F_NUMBER_DEFAULT,
 			.flags = 0,
 		},
-		.query = ov2722_g_fnumber,
+		.query = ov2675_g_fnumber,
 	},
 	{
 		.qc = {
 			.id = V4L2_CID_FNUMBER_RANGE,
 			.type = V4L2_CTRL_TYPE_INTEGER,
 			.name = "f-number range",
-			.minimum = OV2722_F_NUMBER_RANGE,
-			.maximum =  OV2722_F_NUMBER_RANGE,
+			.minimum = OV2675_F_NUMBER_RANGE,
+			.maximum =  OV2675_F_NUMBER_RANGE,
 			.step = 0x01,
-			.default_value = OV2722_F_NUMBER_RANGE,
+			.default_value = OV2675_F_NUMBER_RANGE,
 			.flags = 0,
 		},
-		.query = ov2722_g_fnumber_range,
+		.query = ov2675_g_fnumber_range,
 	},
 };
-#define N_CONTROLS (ARRAY_SIZE(ov2722_controls))
+#define N_CONTROLS (ARRAY_SIZE(ov2675_controls))
 
-static struct ov2722_control *ov2722_find_control(u32 id)
+static struct ov2675_control *ov2675_find_control(u32 id)
 {
 	int i;
 
 	for (i = 0; i < N_CONTROLS; i++)
-		if (ov2722_controls[i].qc.id == id)
-			return &ov2722_controls[i];
+		if (ov2675_controls[i].qc.id == id)
+			return &ov2675_controls[i];
 	return NULL;
 }
 
-static int ov2722_queryctrl(struct v4l2_subdev *sd, struct v4l2_queryctrl *qc)
+static int ov2675_queryctrl(struct v4l2_subdev *sd, struct v4l2_queryctrl *qc)
 {
-	struct ov2722_control *ctrl = ov2722_find_control(qc->id);
-	struct ov2722_device *dev = to_ov2722_sensor(sd);
+	struct ov2675_control *ctrl = ov2675_find_control(qc->id);
+	struct ov2675_device *dev = to_ov2675_sensor(sd);
 
 	if (ctrl == NULL)
 		return -EINVAL;
@@ -641,16 +641,16 @@ static int ov2722_queryctrl(struct v4l2_subdev *sd, struct v4l2_queryctrl *qc)
 }
 
 /* imx control set/get */
-static int ov2722_g_ctrl(struct v4l2_subdev *sd, struct v4l2_control *ctrl)
+static int ov2675_g_ctrl(struct v4l2_subdev *sd, struct v4l2_control *ctrl)
 {
-	struct ov2722_control *s_ctrl;
-	struct ov2722_device *dev = to_ov2722_sensor(sd);
+	struct ov2675_control *s_ctrl;
+	struct ov2675_device *dev = to_ov2675_sensor(sd);
 	int ret;
 
 	if (!ctrl)
 		return -EINVAL;
 
-	s_ctrl = ov2722_find_control(ctrl->id);
+	s_ctrl = ov2675_find_control(ctrl->id);
 	if ((s_ctrl == NULL) || (s_ctrl->query == NULL))
 		return -EINVAL;
 
@@ -661,10 +661,10 @@ static int ov2722_g_ctrl(struct v4l2_subdev *sd, struct v4l2_control *ctrl)
 	return ret;
 }
 
-static int ov2722_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *ctrl)
+static int ov2675_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *ctrl)
 {
-	struct ov2722_control *octrl = ov2722_find_control(ctrl->id);
-	struct ov2722_device *dev = to_ov2722_sensor(sd);
+	struct ov2675_control *octrl = ov2675_find_control(ctrl->id);
+	struct ov2675_device *dev = to_ov2675_sensor(sd);
 	int ret;
 
 	if ((octrl == NULL) || (octrl->tweak == NULL))
@@ -677,14 +677,14 @@ static int ov2722_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *ctrl)
 	return ret;
 }
 
-static int ov2722_init(struct v4l2_subdev *sd)
+static int ov2675_init(struct v4l2_subdev *sd)
 {
-	struct ov2722_device *dev = to_ov2722_sensor(sd);
+	struct ov2675_device *dev = to_ov2675_sensor(sd);
 
 	mutex_lock(&dev->input_lock);
 
 	/* restore settings */
-	ov2722_res = ov2722_res_preview;
+	ov2675_res = ov2675_res_preview;
 	N_RES = N_RES_PREVIEW;
 
 	mutex_unlock(&dev->input_lock);
@@ -695,7 +695,7 @@ static int ov2722_init(struct v4l2_subdev *sd)
 
 static int power_up(struct v4l2_subdev *sd)
 {
-	struct ov2722_device *dev = to_ov2722_sensor(sd);
+	struct ov2675_device *dev = to_ov2675_sensor(sd);
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	int ret;
 
@@ -742,7 +742,7 @@ fail_power:
 
 static int power_down(struct v4l2_subdev *sd)
 {
-	struct ov2722_device *dev = to_ov2722_sensor(sd);
+	struct ov2675_device *dev = to_ov2675_sensor(sd);
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	int ret = 0;
 
@@ -797,18 +797,18 @@ static int check_otp(struct i2c_client *client, int index)
 	u16 address;
 
 	// read otp into buffer
-	ov2722_write_reg(client, OV2722_8BIT, 0x3d81, 0x01);
+	ov2675_write_reg(client, OV2675_8BIT, 0x3d81, 0x01);
 	mdelay(10);
 
 	address = 0x3d05 + index*9;
-	ov2722_read_reg(client, OV2722_8BIT, address, &temp);
+	ov2675_read_reg(client, OV2675_8BIT, address, &temp);
 
 	// disable otp read
-	ov2722_write_reg(client, OV2722_8BIT, 0x3d81, 0x00);
+	ov2675_write_reg(client, OV2675_8BIT, 0x3d81, 0x00);
 
 	// clear otp buffer
 	for (i = 0; i < 32; i++)
-		ov2722_write_reg(client, OV2722_8BIT, 0x3d00 + i, 0x00);
+		ov2675_write_reg(client, OV2675_8BIT, 0x3d00 + i, 0x00);
 
 	if (!temp)
 		return 0;
@@ -828,46 +828,46 @@ static int read_otp(struct i2c_client *client, int index,
 	int address;
 
 	// read otp into buffer
-	ov2722_write_reg(client, OV2722_8BIT, 0x3d81, 0x01);
+	ov2675_write_reg(client, OV2675_8BIT, 0x3d81, 0x01);
 	mdelay(10);
 
 	//address = 0x3d05 + index*9;
 	address = 0x3d00;
-	ov2722_read_reg(client, OV2722_8BIT, address + 5,
+	ov2675_read_reg(client, OV2675_8BIT, address + 5,
 			&((*otp_ptr).module_integrator_id));
 	(*otp_ptr).module_integrator_id = (*otp_ptr).module_integrator_id & 0x7f;
 	v4l2_info(client, "read_otp_wb (*otp_ptr).module_integrator_id=%x \n", (*otp_ptr).module_integrator_id);
 
-	ov2722_read_reg(client, OV2722_8BIT, address + 6, &((*otp_ptr).lens_id));
+	ov2675_read_reg(client, OV2675_8BIT, address + 6, &((*otp_ptr).lens_id));
 	v4l2_info(client, "read_otp_wb (*otp_ptr).lens_id=%x \n", (*otp_ptr).lens_id);
-	ov2722_read_reg(client, OV2722_8BIT, address + 0xb, &((*otp_ptr).mix));
+	ov2675_read_reg(client, OV2675_8BIT, address + 0xb, &((*otp_ptr).mix));
 	v4l2_info(client, "read_otp_wb (*otp_ptr).mix=%x \n", (*otp_ptr).mix);
 
-	ov2722_read_reg(client, OV2722_8BIT, address + 7, &((*otp_ptr).rg_ratio));
+	ov2675_read_reg(client, OV2675_8BIT, address + 7, &((*otp_ptr).rg_ratio));
 	(*otp_ptr).rg_ratio = ((*otp_ptr).rg_ratio << 2) + (((*otp_ptr).mix >> 6) & 0x03);
 	v4l2_info(client, "read_otp_wb (*otp_ptr).rg_ratio=%x \n", (*otp_ptr).rg_ratio);
-	ov2722_read_reg(client, OV2722_8BIT, address + 8, &((*otp_ptr).bg_ratio));
+	ov2675_read_reg(client, OV2675_8BIT, address + 8, &((*otp_ptr).bg_ratio));
 	(*otp_ptr).bg_ratio = ((*otp_ptr).bg_ratio << 2) + (((*otp_ptr).mix >> 4) & 0x03);
 	v4l2_info(client, "read_otp_wb (*otp_ptr).bg_ratio=%x \n", (*otp_ptr).bg_ratio);
 
-	ov2722_read_reg(client, OV2722_8BIT, address + 9, &((*otp_ptr).user_data[0]));
+	ov2675_read_reg(client, OV2675_8BIT, address + 9, &((*otp_ptr).user_data[0]));
 	v4l2_info(client, "read_otp_wb (*otp_ptr).user_data[0]=%x \n", (*otp_ptr).user_data[0]);
-	ov2722_read_reg(client, OV2722_8BIT, address + 0xa, &((*otp_ptr).user_data[1]));
+	ov2675_read_reg(client, OV2675_8BIT, address + 0xa, &((*otp_ptr).user_data[1]));
 	v4l2_info(client, "read_otp_wb (*otp_ptr).user_data[1]=%x \n", (*otp_ptr).user_data[1]);
-	ov2722_read_reg(client, OV2722_8BIT, address + 0xc, &((*otp_ptr).light_rg));
+	ov2675_read_reg(client, OV2675_8BIT, address + 0xc, &((*otp_ptr).light_rg));
 	(*otp_ptr).light_rg = ((*otp_ptr).light_rg << 2) + (((*otp_ptr).mix >>2) & 0x03);
 	v4l2_info(client, "read_otp_wb (*otp_ptr).light_rg=%x \n", (*otp_ptr).light_rg);
 
-	ov2722_read_reg(client, OV2722_8BIT, address + 0xd, &((*otp_ptr).light_bg));
+	ov2675_read_reg(client, OV2675_8BIT, address + 0xd, &((*otp_ptr).light_bg));
 	(*otp_ptr).light_bg = ((*otp_ptr).light_bg << 2) + ((*otp_ptr).mix & 0x03);
 	v4l2_info(client, "read_otp_wb (*otp_ptr).light_bg=%x \n", (*otp_ptr).light_bg);
 
 	// disable otp read
-	ov2722_write_reg(client, OV2722_8BIT, 0x3d81, 0x00);
+	ov2675_write_reg(client, OV2675_8BIT, 0x3d81, 0x00);
 
 	// clear otp buffer
 	for (i = 0; i < 16; i++)
-		ov2722_write_reg(client, OV2722_8BIT, 0x3d00 + i, 0x00);
+		ov2675_write_reg(client, OV2675_8BIT, 0x3d00 + i, 0x00);
 
 	v4l2_info(client, "exit read_otp_wb \n");
 	return 0;
@@ -882,32 +882,32 @@ static int update_awb_gain(struct i2c_client *client, int R_gain,
 {
 	if (R_gain > 0x400) {
 		v4l2_info(client, "  (R_gain>0x400)\n");
-		ov2722_write_reg(client, OV2722_8BIT, 0x5186, R_gain>>8);
-		ov2722_write_reg(client, OV2722_8BIT, 0x5187, R_gain & 0x00ff);
+		ov2675_write_reg(client, OV2675_8BIT, 0x5186, R_gain>>8);
+		ov2675_write_reg(client, OV2675_8BIT, 0x5187, R_gain & 0x00ff);
 	}
 
 	if (G_gain > 0x400) {
 		v4l2_info(client, "  (G_gain>0x400)\n");
-		ov2722_write_reg(client, OV2722_8BIT, 0x5188, G_gain>>8);
-		ov2722_write_reg(client, OV2722_8BIT, 0x5189, G_gain & 0x00ff);
+		ov2675_write_reg(client, OV2675_8BIT, 0x5188, G_gain>>8);
+		ov2675_write_reg(client, OV2675_8BIT, 0x5189, G_gain & 0x00ff);
 	}
 
 	if (B_gain > 0x400) {
 		v4l2_info(client, "  (B_gain>0x400)\n");
-		ov2722_write_reg(client, OV2722_8BIT, 0x518a, B_gain>>8);
-		ov2722_write_reg(client, OV2722_8BIT, 0x518b, B_gain & 0x00ff);
+		ov2675_write_reg(client, OV2675_8BIT, 0x518a, B_gain>>8);
+		ov2675_write_reg(client, OV2675_8BIT, 0x518b, B_gain & 0x00ff);
 	}
 
 	return 0;
 }
 
-// call this function after OV2722 initialization
+// call this function after OV2675 initialization
 // return value: 0 update success
 //		1, no OTP
 static int update_otp(struct v4l2_subdev *sd)
 {
 	struct otp_struct current_otp;
-	struct ov2722_device *dev = to_ov2722_sensor(sd);
+	struct ov2675_device *dev = to_ov2675_sensor(sd);
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	int i;
 	int otp_index;
@@ -915,8 +915,8 @@ static int update_otp(struct v4l2_subdev *sd)
 	int R_gain, G_gain, B_gain, G_gain_R, G_gain_B;
 	int rg, bg;
 
-	ov2722_write_reg(client, OV2722_8BIT, 0x4202, 0x0f);
-	ov2722_write_reg(client, OV2722_8BIT, 0x0100, 0x01);
+	ov2675_write_reg(client, OV2675_8BIT, 0x4202, 0x0f);
+	ov2675_write_reg(client, OV2675_8BIT, 0x0100, 0x01);
 
 	// R/G and B/G of current camera module is read out from sensor OTP
 	// check first OTP with valid data
@@ -930,7 +930,7 @@ static int update_otp(struct v4l2_subdev *sd)
 
 	if (i == 2) {
 		// no valid wb OTP data
-		printk("[ov2722] no OTP data\n");
+		printk("[ov2675] no OTP data\n");
 		return 1;
 	}
 
@@ -951,7 +951,7 @@ static int update_otp(struct v4l2_subdev *sd)
 		// light source information found in OTP
 		bg = current_otp.bg_ratio * (current_otp.light_bg + 512) / 1024;
 	}
-	printk("[ov2722] debug rg = %x bg = %x\n",rg,bg);
+	printk("[ov2675] debug rg = %x bg = %x\n",rg,bg);
 	//calculate G gain
 	//0x400 = 1x gain
 	if (bg < BG_Ratio_Typical) {
@@ -996,13 +996,13 @@ static int update_otp(struct v4l2_subdev *sd)
 	dev->B_gain = B_gain;
 	//update_awb_gain(client, R_gain, G_gain, B_gain);
 
-	ov2722_write_reg(client, OV2722_8BIT, 0x4202, 0x00);
-	ov2722_write_reg(client, OV2722_8BIT, 0x0100, 0x00);
+	ov2675_write_reg(client, OV2675_8BIT, 0x4202, 0x00);
+	ov2675_write_reg(client, OV2675_8BIT, 0x0100, 0x00);
 
 	return 0;
 }
 
-static int ov2722_s_power(struct v4l2_subdev *sd, int on)
+static int ov2675_s_power(struct v4l2_subdev *sd, int on)
 {
 	int ret;
 
@@ -1011,7 +1011,7 @@ static int ov2722_s_power(struct v4l2_subdev *sd, int on)
 	else {
 		ret = power_up(sd);
 		if (!ret) {
-			ov2722_init(sd);
+			ov2675_init(sd);
 			update_otp(sd);
 			return 0;
 		}
@@ -1030,7 +1030,7 @@ static int ov2722_s_power(struct v4l2_subdev *sd, int on)
  * Returns the value of gap or -1 if fail.
  */
 #define LARGEST_ALLOWED_RATIO_MISMATCH 800
-static int distance(struct ov2722_resolution *res, u32 w, u32 h)
+static int distance(struct ov2675_resolution *res, u32 w, u32 h)
 {
 	unsigned int w_ratio = ((res->width << 13)/w);
 	unsigned int h_ratio;
@@ -1057,10 +1057,10 @@ static int nearest_resolution_index(int w, int h)
 	int idx = -1;
 	int dist;
 	int min_dist = INT_MAX;
-	struct ov2722_resolution *tmp_res = NULL;
+	struct ov2675_resolution *tmp_res = NULL;
 
 	for (i = 0; i < N_RES; i++) {
-		tmp_res = &ov2722_res[i];
+		tmp_res = &ov2675_res[i];
 		dist = distance(tmp_res, w, h);
 		if (dist == -1)
 			continue;
@@ -1078,9 +1078,9 @@ static int get_resolution_index(int w, int h)
 	int i;
 
 	for (i = 0; i < N_RES; i++) {
-		if (w != ov2722_res[i].width)
+		if (w != ov2675_res[i].width)
 			continue;
-		if (h != ov2722_res[i].height)
+		if (h != ov2675_res[i].height)
 			continue;
 
 		return i;
@@ -1089,7 +1089,7 @@ static int get_resolution_index(int w, int h)
 	return -1;
 }
 
-static int ov2722_try_mbus_fmt(struct v4l2_subdev *sd,
+static int ov2675_try_mbus_fmt(struct v4l2_subdev *sd,
 			struct v4l2_mbus_framefmt *fmt)
 {
 	int idx;
@@ -1100,11 +1100,11 @@ static int ov2722_try_mbus_fmt(struct v4l2_subdev *sd,
 					fmt->height);
 	if (idx == -1) {
 		/* return the largest resolution */
-		fmt->width = ov2722_res[N_RES - 1].width;
-		fmt->height = ov2722_res[N_RES - 1].height;
+		fmt->width = ov2675_res[N_RES - 1].width;
+		fmt->height = ov2675_res[N_RES - 1].height;
 	} else {
-		fmt->width = ov2722_res[idx].width;
-		fmt->height = ov2722_res[idx].height;
+		fmt->width = ov2675_res[idx].width;
+		fmt->height = ov2675_res[idx].height;
 	}
 	fmt->code = V4L2_MBUS_FMT_SGRBG10_1X10;
 
@@ -1114,40 +1114,40 @@ static int ov2722_try_mbus_fmt(struct v4l2_subdev *sd,
 /* TODO: remove it. */
 static int startup(struct v4l2_subdev *sd)
 {
-	struct ov2722_device *dev = to_ov2722_sensor(sd);
+	struct ov2675_device *dev = to_ov2675_sensor(sd);
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	int ret = 0;
 
-	ret = ov2722_write_reg(client, OV2722_8BIT,
-					OV2722_SW_RESET, 0x01);
+	ret = ov2675_write_reg(client, OV2675_8BIT,
+					OV2675_SW_RESET, 0x01);
 	if (ret) {
-		dev_err(&client->dev, "ov2722 reset err.\n");
+		dev_err(&client->dev, "ov2675 reset err.\n");
 		return ret;
 	}
 
-	ret = ov2722_write_reg_array(client, ov2722_res[dev->fmt_idx].regs);
+	ret = ov2675_write_reg_array(client, ov2675_res[dev->fmt_idx].regs);
 	if (ret) {
-		dev_err(&client->dev, "ov2722 write register err.\n");
+		dev_err(&client->dev, "ov2675 write register err.\n");
 		return ret;
 	}
 
 	return ret;
 }
 
-static int ov2722_s_mbus_fmt(struct v4l2_subdev *sd,
+static int ov2675_s_mbus_fmt(struct v4l2_subdev *sd,
 			     struct v4l2_mbus_framefmt *fmt)
 {
-	struct ov2722_device *dev = to_ov2722_sensor(sd);
+	struct ov2675_device *dev = to_ov2675_sensor(sd);
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
-	struct camera_mipi_info *ov2722_info = NULL;
+	struct camera_mipi_info *ov2675_info = NULL;
 	int ret = 0;
 
-	ov2722_info = v4l2_get_subdev_hostdata(sd);
-	if (ov2722_info == NULL)
+	ov2675_info = v4l2_get_subdev_hostdata(sd);
+	if (ov2675_info == NULL)
 		return -EINVAL;
 
 	mutex_lock(&dev->input_lock);
-	ret = ov2722_try_mbus_fmt(sd, fmt);
+	ret = ov2675_try_mbus_fmt(sd, fmt);
 	if (ret == -1) {
 		dev_err(&client->dev, "try fmt fail\n");
 		goto err;
@@ -1163,12 +1163,12 @@ static int ov2722_s_mbus_fmt(struct v4l2_subdev *sd,
 
 	ret = startup(sd);
 	if (ret) {
-		dev_err(&client->dev, "ov2722 startup err\n");
+		dev_err(&client->dev, "ov2675 startup err\n");
 		goto err;
 	}
 
-	ret = ov2722_get_intg_factor(client, ov2722_info,
-					&ov2722_res[dev->fmt_idx]);
+	ret = ov2675_get_intg_factor(client, ov2675_info,
+					&ov2675_res[dev->fmt_idx]);
 	if (ret)
 		dev_err(&client->dev, "failed to get integration_factor\n");
 
@@ -1176,22 +1176,22 @@ err:
 	mutex_unlock(&dev->input_lock);
 	return ret;
 }
-static int ov2722_g_mbus_fmt(struct v4l2_subdev *sd,
+static int ov2675_g_mbus_fmt(struct v4l2_subdev *sd,
 			     struct v4l2_mbus_framefmt *fmt)
 {
-	struct ov2722_device *dev = to_ov2722_sensor(sd);
+	struct ov2675_device *dev = to_ov2675_sensor(sd);
 
 	if (!fmt)
 		return -EINVAL;
 
-	fmt->width = ov2722_res[dev->fmt_idx].width;
-	fmt->height = ov2722_res[dev->fmt_idx].height;
+	fmt->width = ov2675_res[dev->fmt_idx].width;
+	fmt->height = ov2675_res[dev->fmt_idx].height;
 	fmt->code = V4L2_MBUS_FMT_SBGGR10_1X10;
 
 	return 0;
 }
 
-static int ov2722_detect(struct i2c_client *client)
+static int ov2675_detect(struct i2c_client *client)
 {
 	struct i2c_adapter *adapter = client->adapter;
 	u16 high, low;
@@ -1202,51 +1202,51 @@ static int ov2722_detect(struct i2c_client *client)
 	if (!i2c_check_functionality(adapter, I2C_FUNC_I2C))
 		return -ENODEV;
 
-	ret = ov2722_read_reg(client, OV2722_8BIT,
-					OV2722_SC_CMMN_CHIP_ID_H, &high);
+	ret = ov2675_read_reg(client, OV2675_8BIT,
+					OV2675_SC_CMMN_CHIP_ID_H, &high);
 	if (ret) {
 		dev_err(&client->dev, "sensor_id_high = 0x%x\n", high);
 		return -ENODEV;
 	}
-	ret = ov2722_read_reg(client, OV2722_8BIT,
-					OV2722_SC_CMMN_CHIP_ID_L, &low);
+	ret = ov2675_read_reg(client, OV2675_8BIT,
+					OV2675_SC_CMMN_CHIP_ID_L, &low);
 	id = ((((u16) high) << 8) | (u16) low);
 
-	if ((id != OV2722_ID) && (id != OV2720_ID)) {
+	if ((id != OV2675_ID) && (id != OV2720_ID)) {
 		dev_err(&client->dev, "sensor ID error\n");
 		return -ENODEV;
 	}
 
-	ret = ov2722_read_reg(client, OV2722_8BIT,
-					OV2722_SC_CMMN_SUB_ID, &high);
+	ret = ov2675_read_reg(client, OV2675_8BIT,
+					OV2675_SC_CMMN_SUB_ID, &high);
 	revision = (u8) high & 0x0f;
 
 	dev_dbg(&client->dev, "sensor_revision = 0x%x\n", revision);
-	dev_dbg(&client->dev, "detect ov2722 success\n");
+	dev_dbg(&client->dev, "detect ov2675 success\n");
 	return 0;
 }
 
-static int ov2722_s_stream(struct v4l2_subdev *sd, int enable)
+static int ov2675_s_stream(struct v4l2_subdev *sd, int enable)
 {
-	struct ov2722_device *dev = to_ov2722_sensor(sd);
+	struct ov2675_device *dev = to_ov2675_sensor(sd);
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	int ret;
 
 	mutex_lock(&dev->input_lock);
 
-	ret = ov2722_write_reg(client, OV2722_8BIT, OV2722_SW_STREAM,
-				enable ? OV2722_START_STREAMING :
-				OV2722_STOP_STREAMING);
+	ret = ov2675_write_reg(client, OV2675_8BIT, OV2675_SW_STREAM,
+				enable ? OV2675_START_STREAMING :
+				OV2675_STOP_STREAMING);
 	/* restore settings */
-	ov2722_res = ov2722_res_preview;
+	ov2675_res = ov2675_res_preview;
 	N_RES = N_RES_PREVIEW;
 
 	mutex_unlock(&dev->input_lock);
 	return ret;
 }
 
-/* ov2722 enum frame size, frame intervals */
-static int ov2722_enum_framesizes(struct v4l2_subdev *sd,
+/* ov2675 enum frame size, frame intervals */
+static int ov2675_enum_framesizes(struct v4l2_subdev *sd,
 				  struct v4l2_frmsizeenum *fsize)
 {
 	unsigned int index = fsize->index;
@@ -1255,14 +1255,14 @@ static int ov2722_enum_framesizes(struct v4l2_subdev *sd,
 		return -EINVAL;
 
 	fsize->type = V4L2_FRMSIZE_TYPE_DISCRETE;
-	fsize->discrete.width = ov2722_res[index].width;
-	fsize->discrete.height = ov2722_res[index].height;
-	fsize->reserved[0] = ov2722_res[index].used;
+	fsize->discrete.width = ov2675_res[index].width;
+	fsize->discrete.height = ov2675_res[index].height;
+	fsize->reserved[0] = ov2675_res[index].used;
 
 	return 0;
 }
 
-static int ov2722_enum_frameintervals(struct v4l2_subdev *sd,
+static int ov2675_enum_frameintervals(struct v4l2_subdev *sd,
 				      struct v4l2_frmivalenum *fival)
 {
 	unsigned int index = fival->index;
@@ -1271,15 +1271,15 @@ static int ov2722_enum_frameintervals(struct v4l2_subdev *sd,
 		return -EINVAL;
 
 	fival->type = V4L2_FRMIVAL_TYPE_DISCRETE;
-	fival->width = ov2722_res[index].width;
-	fival->height = ov2722_res[index].height;
+	fival->width = ov2675_res[index].width;
+	fival->height = ov2675_res[index].height;
 	fival->discrete.numerator = 1;
-	fival->discrete.denominator = ov2722_res[index].fps;
+	fival->discrete.denominator = ov2675_res[index].fps;
 
 	return 0;
 }
 
-static int ov2722_enum_mbus_fmt(struct v4l2_subdev *sd,
+static int ov2675_enum_mbus_fmt(struct v4l2_subdev *sd,
 				unsigned int index,
 				enum v4l2_mbus_pixelcode *code)
 {
@@ -1288,10 +1288,10 @@ static int ov2722_enum_mbus_fmt(struct v4l2_subdev *sd,
 	return 0;
 }
 
-static int ov2722_s_config(struct v4l2_subdev *sd,
+static int ov2675_s_config(struct v4l2_subdev *sd,
 			   int irq, void *platform_data)
 {
-	struct ov2722_device *dev = to_ov2722_sensor(sd);
+	struct ov2675_device *dev = to_ov2675_sensor(sd);
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	int ret = 0;
 
@@ -1316,13 +1316,13 @@ static int ov2722_s_config(struct v4l2_subdev *sd,
 	 */
 	ret = power_down(sd);
 	if (ret) {
-		dev_err(&client->dev, "ov2722 power-off err.\n");
+		dev_err(&client->dev, "ov2675 power-off err.\n");
 		goto fail_power_off;
 	}
 
 	ret = power_up(sd);
 	if (ret) {
-		dev_err(&client->dev, "ov2722 power-up err.\n");
+		dev_err(&client->dev, "ov2675 power-up err.\n");
 		goto fail_power_on;
 	}
 
@@ -1331,16 +1331,16 @@ static int ov2722_s_config(struct v4l2_subdev *sd,
 		goto fail_csi_cfg;
 
 	/* config & detect sensor */
-	ret = ov2722_detect(client);
+	ret = ov2675_detect(client);
 	if (ret) {
-		dev_err(&client->dev, "ov2722_detect err s_config.\n");
+		dev_err(&client->dev, "ov2675_detect err s_config.\n");
 		goto fail_csi_cfg;
 	}
 
 	/* turn off sensor, after probed */
 	ret = power_down(sd);
 	if (ret) {
-		dev_err(&client->dev, "ov2722 power-off err.\n");
+		dev_err(&client->dev, "ov2675 power-off err.\n");
 		goto fail_csi_cfg;
 	}
 	mutex_unlock(&dev->input_lock);
@@ -1360,10 +1360,10 @@ platform_init_failed:
 	return ret;
 }
 
-static int ov2722_g_parm(struct v4l2_subdev *sd,
+static int ov2675_g_parm(struct v4l2_subdev *sd,
 			struct v4l2_streamparm *param)
 {
-	struct ov2722_device *dev = to_ov2722_sensor(sd);
+	struct ov2675_device *dev = to_ov2675_sensor(sd);
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 
 	if (!param)
@@ -1382,47 +1382,47 @@ static int ov2722_g_parm(struct v4l2_subdev *sd,
 		param->parm.capture.timeperframe.numerator = 1;
 		param->parm.capture.capturemode = dev->run_mode;
 		param->parm.capture.timeperframe.denominator =
-			ov2722_res[dev->fmt_idx].fps;
+			ov2675_res[dev->fmt_idx].fps;
 	}
 	return 0;
 }
 
-static int ov2722_s_parm(struct v4l2_subdev *sd,
+static int ov2675_s_parm(struct v4l2_subdev *sd,
 			struct v4l2_streamparm *param)
 {
-	struct ov2722_device *dev = to_ov2722_sensor(sd);
+	struct ov2675_device *dev = to_ov2675_sensor(sd);
 	dev->run_mode = param->parm.capture.capturemode;
 
 	mutex_lock(&dev->input_lock);
 	switch (dev->run_mode) {
 	case CI_MODE_VIDEO:
-		ov2722_res = ov2722_res_video;
+		ov2675_res = ov2675_res_video;
 		N_RES = N_RES_VIDEO;
 		break;
 	case CI_MODE_STILL_CAPTURE:
-		ov2722_res = ov2722_res_still;
+		ov2675_res = ov2675_res_still;
 		N_RES = N_RES_STILL;
 		break;
 	default:
-		ov2722_res = ov2722_res_preview;
+		ov2675_res = ov2675_res_preview;
 		N_RES = N_RES_PREVIEW;
 	}
 	mutex_unlock(&dev->input_lock);
 	return 0;
 }
 
-static int ov2722_g_frame_interval(struct v4l2_subdev *sd,
+static int ov2675_g_frame_interval(struct v4l2_subdev *sd,
 				   struct v4l2_subdev_frame_interval *interval)
 {
-	struct ov2722_device *dev = to_ov2722_sensor(sd);
+	struct ov2675_device *dev = to_ov2675_sensor(sd);
 
 	interval->interval.numerator = 1;
-	interval->interval.denominator = ov2722_res[dev->fmt_idx].fps;
+	interval->interval.denominator = ov2675_res[dev->fmt_idx].fps;
 
 	return 0;
 }
 
-static int ov2722_enum_mbus_code(struct v4l2_subdev *sd,
+static int ov2675_enum_mbus_code(struct v4l2_subdev *sd,
 				struct v4l2_subdev_fh *fh,
 				struct v4l2_subdev_mbus_code_enum *code)
 {
@@ -1433,7 +1433,7 @@ static int ov2722_enum_mbus_code(struct v4l2_subdev *sd,
 	return 0;
 }
 
-static int ov2722_enum_frame_size(struct v4l2_subdev *sd,
+static int ov2675_enum_frame_size(struct v4l2_subdev *sd,
 				struct v4l2_subdev_fh *fh,
 				struct v4l2_subdev_frame_size_enum *fse)
 {
@@ -1442,17 +1442,17 @@ static int ov2722_enum_frame_size(struct v4l2_subdev *sd,
 	if (index >= N_RES)
 		return -EINVAL;
 
-	fse->min_width = ov2722_res[index].width;
-	fse->min_height = ov2722_res[index].height;
-	fse->max_width = ov2722_res[index].width;
-	fse->max_height = ov2722_res[index].height;
+	fse->min_width = ov2675_res[index].width;
+	fse->min_height = ov2675_res[index].height;
+	fse->max_width = ov2675_res[index].width;
+	fse->max_height = ov2675_res[index].height;
 
 	return 0;
 
 }
 
 static struct v4l2_mbus_framefmt *
-__ov2722_get_pad_format(struct ov2722_device *sensor,
+__ov2675_get_pad_format(struct ov2675_device *sensor,
 			struct v4l2_subdev_fh *fh, unsigned int pad,
 			enum v4l2_subdev_format_whence which)
 {
@@ -1460,7 +1460,7 @@ __ov2722_get_pad_format(struct ov2722_device *sensor,
 
 	if (pad != 0) {
 		dev_err(&client->dev,
-			"__ov2722_get_pad_format err. pad %x\n", pad);
+			"__ov2675_get_pad_format err. pad %x\n", pad);
 		return NULL;
 	}
 
@@ -1474,13 +1474,13 @@ __ov2722_get_pad_format(struct ov2722_device *sensor,
 	}
 }
 
-static int ov2722_get_pad_format(struct v4l2_subdev *sd,
+static int ov2675_get_pad_format(struct v4l2_subdev *sd,
 				struct v4l2_subdev_fh *fh,
 				struct v4l2_subdev_format *fmt)
 {
-	struct ov2722_device *snr = to_ov2722_sensor(sd);
+	struct ov2675_device *snr = to_ov2675_sensor(sd);
 	struct v4l2_mbus_framefmt *format =
-			__ov2722_get_pad_format(snr, fh, fmt->pad, fmt->which);
+			__ov2675_get_pad_format(snr, fh, fmt->pad, fmt->which);
 	if (!format)
 		return -EINVAL;
 
@@ -1488,11 +1488,11 @@ static int ov2722_get_pad_format(struct v4l2_subdev *sd,
 	return 0;
 }
 
-static int ov2722_set_pad_format(struct v4l2_subdev *sd,
+static int ov2675_set_pad_format(struct v4l2_subdev *sd,
 				struct v4l2_subdev_fh *fh,
 				struct v4l2_subdev_format *fmt)
 {
-	struct ov2722_device *snr = to_ov2722_sensor(sd);
+	struct ov2675_device *snr = to_ov2675_sensor(sd);
 
 	if (fmt->which == V4L2_SUBDEV_FORMAT_ACTIVE)
 		snr->format = fmt->format;
@@ -1500,61 +1500,61 @@ static int ov2722_set_pad_format(struct v4l2_subdev *sd,
 	return 0;
 }
 
-static int ov2722_g_skip_frames(struct v4l2_subdev *sd, u32 *frames)
+static int ov2675_g_skip_frames(struct v4l2_subdev *sd, u32 *frames)
 {
-	struct ov2722_device *dev = to_ov2722_sensor(sd);
+	struct ov2675_device *dev = to_ov2675_sensor(sd);
 
 	mutex_lock(&dev->input_lock);
-	*frames = ov2722_res[dev->fmt_idx].skip_frames;
+	*frames = ov2675_res[dev->fmt_idx].skip_frames;
 	mutex_unlock(&dev->input_lock);
 
 	return 0;
 }
 
-static const struct v4l2_subdev_sensor_ops ov2722_sensor_ops = {
-	.g_skip_frames	= ov2722_g_skip_frames,
+static const struct v4l2_subdev_sensor_ops ov2675_sensor_ops = {
+	.g_skip_frames	= ov2675_g_skip_frames,
 };
 
-static const struct v4l2_subdev_video_ops ov2722_video_ops = {
-	.s_stream = ov2722_s_stream,
-	.g_parm = ov2722_g_parm,
-	.s_parm = ov2722_s_parm,
-	.enum_framesizes = ov2722_enum_framesizes,
-	.enum_frameintervals = ov2722_enum_frameintervals,
-	.enum_mbus_fmt = ov2722_enum_mbus_fmt,
-	.try_mbus_fmt = ov2722_try_mbus_fmt,
-	.g_mbus_fmt = ov2722_g_mbus_fmt,
-	.s_mbus_fmt = ov2722_s_mbus_fmt,
-	.g_frame_interval = ov2722_g_frame_interval,
+static const struct v4l2_subdev_video_ops ov2675_video_ops = {
+	.s_stream = ov2675_s_stream,
+	.g_parm = ov2675_g_parm,
+	.s_parm = ov2675_s_parm,
+	.enum_framesizes = ov2675_enum_framesizes,
+	.enum_frameintervals = ov2675_enum_frameintervals,
+	.enum_mbus_fmt = ov2675_enum_mbus_fmt,
+	.try_mbus_fmt = ov2675_try_mbus_fmt,
+	.g_mbus_fmt = ov2675_g_mbus_fmt,
+	.s_mbus_fmt = ov2675_s_mbus_fmt,
+	.g_frame_interval = ov2675_g_frame_interval,
 };
 
-static const struct v4l2_subdev_core_ops ov2722_core_ops = {
-	.s_power = ov2722_s_power,
-	.queryctrl = ov2722_queryctrl,
-	.g_ctrl = ov2722_g_ctrl,
-	.s_ctrl = ov2722_s_ctrl,
-	.ioctl = ov2722_ioctl,
+static const struct v4l2_subdev_core_ops ov2675_core_ops = {
+	.s_power = ov2675_s_power,
+	.queryctrl = ov2675_queryctrl,
+	.g_ctrl = ov2675_g_ctrl,
+	.s_ctrl = ov2675_s_ctrl,
+	.ioctl = ov2675_ioctl,
 };
 
-static const struct v4l2_subdev_pad_ops ov2722_pad_ops = {
-	.enum_mbus_code = ov2722_enum_mbus_code,
-	.enum_frame_size = ov2722_enum_frame_size,
-	.get_fmt = ov2722_get_pad_format,
-	.set_fmt = ov2722_set_pad_format,
+static const struct v4l2_subdev_pad_ops ov2675_pad_ops = {
+	.enum_mbus_code = ov2675_enum_mbus_code,
+	.enum_frame_size = ov2675_enum_frame_size,
+	.get_fmt = ov2675_get_pad_format,
+	.set_fmt = ov2675_set_pad_format,
 };
 
-static const struct v4l2_subdev_ops ov2722_ops = {
-	.core = &ov2722_core_ops,
-	.video = &ov2722_video_ops,
-	.pad = &ov2722_pad_ops,
-	.sensor = &ov2722_sensor_ops,
+static const struct v4l2_subdev_ops ov2675_ops = {
+	.core = &ov2675_core_ops,
+	.video = &ov2675_video_ops,
+	.pad = &ov2675_pad_ops,
+	.sensor = &ov2675_sensor_ops,
 };
 
-static int ov2722_remove(struct i2c_client *client)
+static int ov2675_remove(struct i2c_client *client)
 {
 	struct v4l2_subdev *sd = i2c_get_clientdata(client);
-	struct ov2722_device *dev = to_ov2722_sensor(sd);
-	dev_dbg(&client->dev, "ov2722_remove...\n");
+	struct ov2675_device *dev = to_ov2675_sensor(sd);
+	dev_dbg(&client->dev, "ov2675_remove...\n");
 
 	if (dev->platform_data->platform_deinit)
 		dev->platform_data->platform_deinit();
@@ -1568,12 +1568,12 @@ static int ov2722_remove(struct i2c_client *client)
 	return 0;
 }
 
-static int ov2722_probe(struct i2c_client *client,
+static int ov2675_probe(struct i2c_client *client,
 			const struct i2c_device_id *id)
 {
-	struct ov2722_device *dev;
+	struct ov2675_device *dev;
 	int ret;
-
+pr_info("ov2675 probe\n");
 	dev = kzalloc(sizeof(*dev), GFP_KERNEL);
 	if (!dev) {
 		dev_err(&client->dev, "out of memory\n");
@@ -1583,10 +1583,10 @@ static int ov2722_probe(struct i2c_client *client,
 	mutex_init(&dev->input_lock);
 
 	dev->fmt_idx = 0;
-	v4l2_i2c_subdev_init(&(dev->sd), client, &ov2722_ops);
+	v4l2_i2c_subdev_init(&(dev->sd), client, &ov2675_ops);
 
 	if (client->dev.platform_data) {
-		ret = ov2722_s_config(&dev->sd, client->irq,
+		ret = ov2675_s_config(&dev->sd, client->irq,
 				       client->dev.platform_data);
 		if (ret)
 			goto out_free;
@@ -1599,7 +1599,7 @@ static int ov2722_probe(struct i2c_client *client,
 
 	ret = media_entity_init(&dev->sd.entity, 1, &dev->pad, 0);
 	if (ret)
-		ov2722_remove(client);
+		ov2675_remove(client);
 
 	return ret;
 out_free:
@@ -1608,35 +1608,35 @@ out_free:
 	return ret;
 }
 
-MODULE_DEVICE_TABLE(i2c, ov2722_id);
-static struct i2c_driver ov2722_driver = {
+MODULE_DEVICE_TABLE(i2c, ov2675_id);
+static struct i2c_driver ov2675_driver = {
 	.driver = {
 		.owner = THIS_MODULE,
-		.name = OV2722_NAME,
+		.name = OV2675_NAME,
 	},
-	.probe = ov2722_probe,
-	.remove = ov2722_remove,
-	.id_table = ov2722_id,
+	.probe = ov2675_probe,
+	.remove = ov2675_remove,
+	.id_table = ov2675_id,
 };
 
-static int init_ov2722(void)
+static int init_ov2675(void)
 {
 
-	if((intel_mid_get_board_id() & HW_BOARD_7_LTE))
-		return 0;
+//	if((intel_mid_get_board_id() & HW_BOARD_7_LTE))
+//		return 0;
 
-	return i2c_add_driver(&ov2722_driver);
+	return i2c_add_driver(&ov2675_driver);
 }
 
-static void exit_ov2722(void)
+static void exit_ov2675(void)
 {
 
-	i2c_del_driver(&ov2722_driver);
+	i2c_del_driver(&ov2675_driver);
 }
 
-module_init(init_ov2722);
-module_exit(exit_ov2722);
+module_init(init_ov2675);
+module_exit(exit_ov2675);
 
 MODULE_AUTHOR("Wei Liu <wei.liu@intel.com>");
-MODULE_DESCRIPTION("A low-level driver for OmniVision 2722 sensors");
+MODULE_DESCRIPTION("A low-level driver for OmniVision 2675 sensors");
 MODULE_LICENSE("GPL");

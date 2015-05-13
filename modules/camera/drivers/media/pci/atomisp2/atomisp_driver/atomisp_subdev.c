@@ -763,6 +763,7 @@ static const struct v4l2_ctrl_config ctrl_fmt_auto = {
 	.min = 0,
 	.max = 1,
 	.def = 1,
+	.step = 1
 };
 
 static const char * const ctrl_run_mode_menu[] = {
@@ -815,6 +816,7 @@ static const struct v4l2_ctrl_config ctrl_continuous_mode = {
 	.min = 0,
 	.max = 1,
 	.def = 0,
+	.step = 1,
 };
 
 /*
@@ -860,6 +862,7 @@ static const struct v4l2_ctrl_config ctrl_continuous_viewfinder = {
 	.min = 0,
 	.max = 1,
 	.def = 0,
+	.step = 1,
 };
 
 static void atomisp_init_subdev_pipe(struct atomisp_sub_device *asd,

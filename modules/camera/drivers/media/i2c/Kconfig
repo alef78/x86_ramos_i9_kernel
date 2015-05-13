@@ -125,6 +125,17 @@ config VIDEO_OV5640
 
          It currently only works with the atomisp driver.
 
+config VIDEO_OV5645
+       tristate "Omnivision ov5645 sensor support"
+       depends on I2C && VIDEO_V4L2
+       ---help---
+         This is a Video4Linux2 sensor-level driver for the Micron
+         ov5645 5 Mpixel camera.
+
+         ov5645 is video camrea sensor.
+
+         It currently only works with the atomisp driver.
+
 config VIDEO_AP1302
        tristate "AP1302 external ISP support"
        depends on I2C && VIDEO_V4L2

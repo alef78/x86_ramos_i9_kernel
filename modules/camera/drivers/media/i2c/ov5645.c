@@ -44,14 +44,18 @@
 
 #define to_ov5645_sensor(sd) container_of(sd, struct ov5645_device, sd)
 
-static int ov5645_g_color_effect(struct v4l2_subdev *sd, int *effect)
-{
-	struct ov5645_device *dev = to_ov5645_sensor(sd);
+#define DEBUG
+ 
+#ifdef DEBUG
+#define ov5645_debug(fmt, arg...)	printk("[ov5645-sensor]: " fmt, ## arg)
+#else
+#define ov5645_debug(fmt, arg...)
+#endif
 
-	*effect = dev->color_effect;
+static __s32 whitebalance_saved = V4L2_WHITE_BALANCE_AUTO; //default whitebalance 
+static __s32 exposure_saved = 0; //default exposure value
+static __s32 scene_mode_saved = V4L2_SCENE_MODE_NONE; //default scene mode
 
-	return 0;
-}
 
 static int
 ov5645_read_reg(struct i2c_client *client, u16 data_length, u16 reg, u32 *val)
@@ -265,6 +269,7 @@ static int ov5645_write_reg_array(struct i2c_client *client,
 	return 0;
 }
 
+
 static const struct firmware *
 load_firmware(struct device *dev)
 {
@@ -295,13 +300,34 @@ static int ov5645_af_init(struct v4l2_subdev *sd)
 	int err;
 	int i;
 	int group_length;
+	 int length,address;
 
 	/* reset MCU */
 	err = ov5645_write_reg(client, MISENSOR_8BIT,
 				OV5645_REG_SYS_RESET, OV5645_MCU_RESET);
 	if (err)
 		return err;
-
+		err = ov5645_write_reg(client, MISENSOR_8BIT,
+				0x3001, 0x08);
+	if (err)
+		return err;
+		err = ov5645_write_reg(client, MISENSOR_8BIT,
+				0x3004, 0xef);
+	if (err)
+		return err;
+		err = ov5645_write_reg(client, MISENSOR_8BIT,
+				0x3005, 0xf7);
+	if (err)
+		return err;
+#if 0
+	 length = sizeof(ov5645_af_firmware)/sizeof(int);
+        address = 0x8000;
+        for(i = 0;i < length;i++) {
+        ov5645_write_reg(client, MISENSOR_8BIT,address,ov5645_af_firmware[i]);
+        address++;
+        }
+#endif
+#if 1		//lwl modify
 	/* download firmware */
 	if (dev->firmware) {
 		firmware = dev->firmware;
@@ -342,7 +368,9 @@ static int ov5645_af_init(struct v4l2_subdev *sd)
 		dev_err(&client->dev, "write firmwares reg failed\n");
 		return err;
 	}
+#endif
 	return ov5645_write_reg_array(client, ov5645_focus_init);
+	
 }
 
 static int ov5645_s_focus_mode(struct v4l2_subdev *sd, int mode)
@@ -350,7 +378,6 @@ static int ov5645_s_focus_mode(struct v4l2_subdev *sd, int mode)
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	struct ov5645_device *dev = to_ov5645_sensor(sd);
 	int err = 0;
-
 	/*
 	 * if sensor streamoff, writing focus mode reg is invalid.
 	 * only writing focus mode reg is valid after streamon.
@@ -360,7 +387,6 @@ static int ov5645_s_focus_mode(struct v4l2_subdev *sd, int mode)
 		dev->focus_mode_change = true;
 		return 0;
 	}
-
 	switch (mode) {
 	case V4L2_CID_AUTO_FOCUS_START:
 		/* start single focus */
@@ -414,7 +440,6 @@ static int ov5645_s_cont_focus(struct v4l2_subdev *sd, s32 value)
 static int ov5645_pause_focus(struct v4l2_subdev *sd, s32 value)
 {
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
-
 	if (value != V4L2_LOCK_FOCUS) {
 		dev_err(&client->dev, "invalid focus cmd.\n");
 		return -EINVAL;
@@ -466,6 +491,15 @@ static int ov5645_s_color_effect(struct v4l2_subdev *sd, int effect)
 	}
 
 	dev->color_effect = effect;
+	return 0;
+}
+
+static int ov5645_g_color_effect(struct v4l2_subdev *sd, int *effect)
+{
+	struct ov5645_device *dev = to_ov5645_sensor(sd);
+
+	*effect = dev->color_effect;
+
 	return 0;
 }
 
@@ -741,7 +775,6 @@ static int ov5645_get_light_frequency(struct v4l2_subdev *sd,
 					OV5645_REG_LIGHT_CTRL_0, &temp);
 	if (err)
 		return err;
-
 	if (temp & OV5645_AUTO_BAND) {
 		/* manual */
 		err = ov5645_read_reg(client, MISENSOR_8BIT,
@@ -932,13 +965,13 @@ static int ov5645_start_preview(struct v4l2_subdev *sd)
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	struct ov5645_device *dev = to_ov5645_sensor(sd);
 	int ret;
-
 	dev->preview_ag_ae = false;
-
+	u32 retvalue;
+#if 0
 	ret = ov5645_set_awb_gain_mode(sd, OV5645_AWB_GAIN_AUTO);
 	if (ret)
 		return ret;
-
+#endif
 	ret = ov5645_set_gain16(sd, dev->preview_gain16);
 	if (ret)
 		return ret;
@@ -954,11 +987,16 @@ static int ov5645_start_preview(struct v4l2_subdev *sd)
 	ret = ov5645_set_bandingfilter(sd);
 	if (ret)
 		return ret;
-
 	ret = ov5645_set_ae_target(sd, OV5645_AE_TARGET);
 	if (ret)
 		return ret;
+	if (ov5645_read_reg(client, MISENSOR_8BIT,
+		0x5583, &retvalue)) {
+		return -ENODEV;
+			
+	}
 
+	dev_info(&client->dev, "preview 0x5583 ret = 0x%x\n", retvalue);
 	return ov5645_set_night_mode(sd, dev->night_mode);
 }
 
@@ -967,6 +1005,7 @@ static int ov5645_stop_preview(struct v4l2_subdev *sd)
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	struct ov5645_device *dev = to_ov5645_sensor(sd);
 	int err;
+	u32 retvalue;
 
 	/* read preview shutter */
 	err = ov5645_get_shutter(sd, &dev->preview_shutter);
@@ -986,6 +1025,12 @@ static int ov5645_stop_preview(struct v4l2_subdev *sd)
 	err = ov5645_set_awb_gain_mode(sd, OV5645_AWB_GAIN_MANUAL);
 	if (err)
 		return err;
+	if (ov5645_read_reg(client, MISENSOR_8BIT,
+		0x5583, &retvalue)) {
+		return -ENODEV;
+			
+	}
+	dev_info(&client->dev, "stop preview 0x5583 ret = 0x%x\n", retvalue);
 
 	/* get average */
 	return ov5645_read_reg(client, MISENSOR_8BIT,
@@ -996,11 +1041,11 @@ static int ov5645_start_video(struct v4l2_subdev *sd)
 {
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	int err;
-
+#if 0
 	err = ov5645_set_awb_gain_mode(sd, OV5645_AWB_GAIN_AUTO);
 	if (err)
 		return err;
-
+#endif
 	err = ov5645_set_ag_ae(client, 1);
 	if (err)
 		return err;
@@ -1025,16 +1070,16 @@ static int ov5645_start_capture(struct v4l2_subdev *sd)
 	u32 light_frequency, capture_bandingfilter, capture_max_band;
 	long capture_gain16_shutter;
 	int err;
-
+	u32 retvalue;
 	if (!dev->preview_ag_ae) {
 		dev_err(&client->dev, "preview gain and shutter are not available.\n");
 		return -EINVAL;
 	}
-
+#if 0
 	err = ov5645_set_awb_gain_mode(sd, OV5645_AWB_GAIN_AUTO);
 	if (err)
 		return err;
-
+#endif
 	err = ov5645_set_ag_ae(client, 0);
 	if (err)
 		return err;
@@ -1080,12 +1125,12 @@ static int ov5645_start_capture(struct v4l2_subdev *sd)
 					dev->preview_shutter *
 					capture_sysclk / dev->preview_sysclk *
 					dev->preview_hts / capture_hts *
-					OV5645_AE_TARGET / dev->average;
+					OV5645_AE_TARGET / dev->average*2;
 	} else {
 		capture_gain16_shutter = dev->preview_gain16 *
 					dev->preview_shutter *
 					capture_sysclk / dev->preview_sysclk *
-					dev->preview_hts / capture_hts;
+					dev->preview_hts / capture_hts*2;
 	}
 	/* gain to shutter */
 	if (capture_gain16_shutter < (capture_bandingfilter * 16)) {
@@ -1132,7 +1177,12 @@ static int ov5645_start_capture(struct v4l2_subdev *sd)
 		if (err)
 			return err;
 	}
-
+	if (ov5645_read_reg(client, MISENSOR_8BIT,
+		0x5583, &retvalue)) {
+		return -ENODEV;
+			
+	}
+	dev_info(&client->dev, "capture 0x5583 ret = 0x%x\n", retvalue);
 	return ov5645_set_shutter(sd, capture_shutter);
 }
 
@@ -1154,7 +1204,7 @@ static int __ov5645_init(struct v4l2_subdev *sd)
 {
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	int ret;
-
+	printk("*****ov5645 start to write init settings*****\n");
 	ret = ov5645_write_reg_array(client, ov5645_init);
 	if (ret)
 		return ret;
@@ -1163,12 +1213,14 @@ static int __ov5645_init(struct v4l2_subdev *sd)
 	 * delay 5ms to wait for sensor initialization finish.
 	 */
 	usleep_range(5000, 6000);
+	
+	ret = ov5645_write_reg_array(client, booyi_init);
 
 	ret = ov5645_af_init(sd);
 	if (ret)
 		return ret;
 	msleep(20);
-
+	printk("*****ov5645 finished init settings will going to standby*****\n");
 	return ov5645_standby(sd);
 }
 
@@ -1197,12 +1249,11 @@ static int power_up(struct v4l2_subdev *sd)
 	ret = dev->platform_data->gpio_ctrl(sd, 1);
 	if (ret)
 		dev_err(&client->dev, "gpio failed\n");
-
 	/*
-	 * according to DS, 20ms is needed between power up and first i2c
+	 * according to DS, 40ms is needed between power up and first i2c
 	 * commend
 	 */
-	msleep(20);
+	msleep(40);
 
 	return 0;
 
@@ -1253,7 +1304,7 @@ static int ov5645_s_power(struct v4l2_subdev *sd, int power)
 
 	if (power_up(sd))
 		return -EINVAL;
-
+	printk("*********ov5645_s_power finised **** \n");
 	return __ov5645_init(sd);
 }
 
@@ -1404,7 +1455,7 @@ static int ov5645_s_mbus_fmt(struct v4l2_subdev *sd,
 	u32 width = fmt->width;
 	u32 height = fmt->height;
 	int ret;
-
+	u32 retvalue;
 	ov5645_try_res(&width, &height);
 	res_index = ov5645_to_res(width, height);
 
@@ -1413,7 +1464,9 @@ static int ov5645_s_mbus_fmt(struct v4l2_subdev *sd,
 		WARN_ON(1);
 		return -EINVAL;
 	}
+	printk("********ov5645 try width == %d ,height==%d \n",width, height);
 
+	printk("********ov5645 resolution res_index->res = %d\n",res_index->res);
 	switch (res_index->res) {
 	case OV5645_RES_QVGA:
 		ret = ov5645_write_reg_array(c, ov5645_qvga_init);
@@ -1428,7 +1481,7 @@ static int ov5645_s_mbus_fmt(struct v4l2_subdev *sd,
 		ret = ov5645_write_reg_array(c, ov5645_360p_init);
 		break;
 	case OV5645_RES_VGA:
-		ret = ov5645_write_reg_array(c, ov5645_vga_init);
+		ret = ov5645_write_reg_array(c, ov5645_vga_init);;
 		break;
 	case OV5645_RES_480P:
 		ret = ov5645_write_reg_array(c, ov5645_480p_init);
@@ -1462,7 +1515,7 @@ static int ov5645_s_mbus_fmt(struct v4l2_subdev *sd,
 	}
 	if (ret)
 		return -EINVAL;
-
+	printk("***************finished set fmt with ov5645\n");
 	if (dev->res != res_index->res) {
 		int index;
 
@@ -1483,7 +1536,12 @@ static int ov5645_s_mbus_fmt(struct v4l2_subdev *sd,
 			ov5645_res[index].used = 0;
 		}
 	}
-
+	if (ov5645_read_reg(c, MISENSOR_8BIT,
+		0x4800, &retvalue)) {
+		dev_err(&c->dev, "0x4800 = 0x%x\n", retvalue);
+		return -ENODEV;
+	}
+	dev_info(&c->dev, "0x4800 ret = 0x%x\n", retvalue);
 	/*
 	 * ov5645 - we don't poll for context switch
 	 * because it does not happen with streaming disabled.
@@ -1492,15 +1550,12 @@ static int ov5645_s_mbus_fmt(struct v4l2_subdev *sd,
 
 	fmt->width = width;
 	fmt->height = height;
+	fmt->code = V4L2_MBUS_FMT_UYVY8_1X16;
 
 	/* relaunch default focus zone */
-	ret = ov5645_write_reg(c, MISENSOR_8BIT,
+	return ov5645_write_reg(c, MISENSOR_8BIT,
 					OV5645_REG_FOCUS_MODE,
 					OV5645_RELAUNCH_FOCUS);
-	if (ret)
-		return -EINVAL;
-
-	return ov5645_wakeup(sd);
 }
 
 static int ov5645_detect(struct i2c_client *client,  u16 *id, u8 *revision)
@@ -1518,7 +1573,7 @@ static int ov5645_detect(struct i2c_client *client,  u16 *id, u8 *revision)
 		dev_err(&client->dev, "sensor_id_high = 0x%x\n", retvalue);
 		return -ENODEV;
 	}
-
+	printk("ov5645 sensor_id = 0x%x\n", retvalue);
 	dev_info(&client->dev, "sensor_id = 0x%x\n", retvalue);
 	if (retvalue != OV5645_MOD_ID) {
 		dev_err(&client->dev, "%s: failed: client->addr = %x\n",
@@ -1538,7 +1593,7 @@ ov5645_s_config(struct v4l2_subdev *sd, int irq, void *platform_data)
 	struct ov5645_device *dev = to_ov5645_sensor(sd);
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	u8 sensor_revision;
-	u16 sensor_id;
+	u16 sensor_id = 0;
 	int ret;
 
 	if (NULL == platform_data)
@@ -1546,8 +1601,13 @@ ov5645_s_config(struct v4l2_subdev *sd, int irq, void *platform_data)
 
 	dev->platform_data =
 	    (struct camera_sensor_platform_data *)platform_data;
-
-	dev->platform_data->platform_init(client);
+	if (dev->platform_data->platform_init) {
+		ret = dev->platform_data->platform_init(client);
+		if (ret) {
+			v4l2_err(client, "ov5645 platform init err\n");
+			return ret;
+		}
+	}
 	ret = ov5645_s_power(sd, 1);
 	if (ret) {
 		dev_err(&client->dev, "power_ctrl failed");
@@ -1603,7 +1663,192 @@ static int ov5645_g_fnumber_range(struct v4l2_subdev *sd, s32 *val)
 		(OV5645_F_NUMBER_DEFAULT_NUM << 8) | OV5645_F_NUMBER_DEM;
 	return 0;
 }
+//EXPOSURE
+static int ov5645_s_exposure(struct v4l2_subdev *sd, s32 exposure)
+{
+    struct i2c_client *client = v4l2_get_subdevdata(sd);
+    struct ov5645_device *dev = to_ov5645_sensor(sd);
+    int err = 0;
+    int target;
+    ov5645_debug(" George exposure==%d\n",exposure);
+    switch (exposure) {
+     case -3:
+        target = OV5645_AE_TARGET/ 8;
+        err=ov5645_set_ae_target(sd,target);
+        break;
+     case -2:
+        target = OV5645_AE_TARGET/4;
+        err=ov5645_set_ae_target(sd,target);
+        break;
+     case -1:
+        target = OV5645_AE_TARGET/2;
+        err=ov5645_set_ae_target(sd,target);
+        break;
 
+     case 0:
+        target = OV5645_AE_TARGET;
+        err=ov5645_set_ae_target(sd,target);
+        break;
+
+     case 1:
+        target = OV5645_AE_TARGET*2;
+        err=ov5645_set_ae_target(sd,target);
+        break;
+
+     case 2:
+        target = OV5645_AE_TARGET*4;
+        err=ov5645_set_ae_target(sd,target);
+        break;
+
+     case 3:
+        target = OV5645_AE_TARGET*8;
+        err=ov5645_set_ae_target(sd,target);
+        break;
+     default:
+        dev_err(&client->dev, "invalid color exposure.\n");
+        return -ERANGE;
+    }
+    
+    if (err) {
+        dev_err(&client->dev, "setting exposure fails.\n");
+        return err;
+    }
+	exposure_saved= exposure;
+
+	return 0;
+}
+
+static int ov5645_g_exposure(struct v4l2_subdev *sd, s32 *exposure)
+{
+    *exposure = exposure_saved;
+    return 0;
+}
+
+//AWB
+
+static int ov5645_set_wb(struct v4l2_subdev *sd, s32  val)
+{
+    struct i2c_client *c = v4l2_get_subdevdata(sd);
+    const struct misensor_reg *regs = NULL;
+    int ret = 0;
+    ov5645_debug(" George ***********ov5645_set_wb**********\n");
+    ov5645_debug(" George ***********val:%d\n",val);
+    switch(val) {
+    case V4L2_WHITE_BALANCE_AUTO:
+        ov5645_debug(" George *****V4L2_WHITE_BALANCE_AUTO******\n");
+        regs = ov5645_wb_auto;
+        break;
+    case V4L2_WHITE_BALANCE_CLOUDY:
+        ov5645_debug(" George *****V4L2_WHITE_BALANCE_CLOUDY******\n");
+        regs = ov5645_wb_cloudy;
+        break;
+    case V4L2_WHITE_BALANCE_INCANDESCENT:
+        ov5645_debug(" George *****V4L2_WHITE_BALANCE_INCANDESCENT******\n");
+        regs = ov5645_wb_incandescent;
+        break;
+    case V4L2_WHITE_BALANCE_DAYLIGHT:
+        ov5645_debug(" George *****V4L2_WHITE_BALANCE_DAYLIGHT******\n");
+        regs = ov5645_wb_daylight;
+        break;
+    case V4L2_WHITE_BALANCE_FLUORESCENT:
+        ov5645_debug(" George *****V4L2_WHITE_BALANCE_FLUORESCENT******\n");
+        regs = ov5645_wb_fluorescent;
+        break;
+    default:
+        printk(KERN_WARNING "[ov5645]: whitebalance  val %d is not supported\n",
+            val);
+        break;
+	}
+
+	if (regs)
+        ret = ov5645_write_reg_array(c, regs);
+	else
+        return -EINVAL;
+
+	if (ret < 0)
+        return -EIO;
+	whitebalance_saved = val;
+
+        return 0;
+}
+
+static int ov5645_get_wb(struct v4l2_subdev *sd, s32  *val)	
+{
+	ov5645_debug(" George *****whitebalance_saved:%d\n",whitebalance_saved);
+	*val = whitebalance_saved;
+	return 0;
+}
+
+//AE METERING MODE
+static __s32 exposure_metering_saved = V4L2_EXPOSURE_METERING_AVERAGE;
+static int ov5645_s_exposure_metering(struct v4l2_subdev *sd, s32  val){
+    return 0;
+}
+static int ov5645_g_exposure_metering(struct v4l2_subdev *sd, s32  *val)
+{
+    *val = exposure_metering_saved;
+    return 0;
+}
+
+
+static int ov5645_s_scene_mode(struct v4l2_subdev *sd, s32  val){
+    struct i2c_client *c = v4l2_get_subdevdata(sd);
+    struct ov5645_device *dev = to_ov5645_sensor(sd);
+    const struct misensor_reg *regs = NULL;
+    int ret = 0;
+    ov5645_debug(" George ***********ov5645_s_scene_mode**********\n");
+    ov5645_debug(" George ***********val:%d\n",val);
+    switch(val) {
+       case V4L2_SCENE_MODE_NONE:
+          ov5645_debug(" George *****V4L2_SCENE_MODE_NONE******\n");
+          regs = ov5645_scene_mode_auto;
+          break;
+       case V4L2_SCENE_MODE_FIREWORKS:
+          regs = ov5645_scene_mode_fireworks;
+          break;
+       case V4L2_SCENE_MODE_LANDSCAPE:
+          regs=ov5645_scene_mode_landscape;
+          break;
+       case V4L2_SCENE_MODE_NIGHT:
+          regs=ov5645_scene_mode_night;
+          break;
+       case V4L2_SCENE_MODE_PORTRAIT:
+          regs=ov5645_scene_mode_portrait;
+          break;
+       case V4L2_SCENE_MODE_SPORTS:
+          regs=ov5645_scene_mode_sport;
+          break;
+       default:
+          printk(KERN_WARNING "[ov5645]: scene mode  val %d is not supported\n",val);
+          break;
+	}
+
+    if (regs)
+          ret = ov5645_write_reg_array(c, regs);
+    else
+          return -EINVAL;
+
+    if (ret < 0)
+          return -EIO;
+    scene_mode_saved = val;
+
+    return 0;
+
+}
+static int ov5645_g_scene_mode (struct v4l2_subdev *sd, s32  *val)
+{
+    *val = scene_mode_saved;
+    return 0;
+}
+
+static int ov5645_g_focus_value(struct v4l2_subdev *sd, s32 *val)
+{
+    struct i2c_client *client = v4l2_get_subdevdata(sd);
+    ov5645_debug(" George ov5645  focus val==%d\n",val);
+    return	ov5645_read_reg(client, MISENSOR_8BIT,
+                        OV5645_REG_FOCUS_MODE,
+                        val);
+}
 static struct ov5645_control ov5645_controls[] = {
 	{
 		.qc = {
@@ -1679,6 +1924,7 @@ static struct ov5645_control ov5645_controls[] = {
 			.default_value = 0,
 		},
 		.tweak = ov5645_pause_focus,
+		.query  =ov5645_g_focus_value,
 	},
 	{
 		.qc = {
@@ -1691,6 +1937,7 @@ static struct ov5645_control ov5645_controls[] = {
 			.default_value = 0,
 		},
 		.tweak = ov5645_release_focus,
+		.query  =ov5645_g_focus_value,
 	},
 	{
 		.qc = {
@@ -1768,6 +2015,78 @@ static struct ov5645_control ov5645_controls[] = {
 		},
 		.query = ov5645_g_fnumber_range,
 	},
+  //EXPOSURE
+     {
+        .qc = {
+            .id = V4L2_CID_EXPOSURE,
+            .type = V4L2_CTRL_TYPE_INTEGER,
+            .name = "exposure",
+            .minimum = -2,
+            .maximum = 2,
+            .step = 1,
+            .default_value = 0,
+        },
+        .tweak = ov5645_s_exposure,
+        .query = ov5645_g_exposure,
+     },
+
+    //AWB
+     {
+        .qc = {
+            .id = V4L2_CID_AUTO_N_PRESET_WHITE_BALANCE,
+            .type = V4L2_CTRL_TYPE_INTEGER,
+            .name = "white balance ",
+            .minimum = 0,
+            .maximum = 5,
+            .step = 1,
+            .default_value = 0,
+        },
+        .tweak = ov5645_set_wb,
+        .query = ov5645_get_wb,
+     },
+     
+      //AF
+     {
+        .qc = {
+            .id = V4L2_CID_AUTO_FOCUS_RANGE,
+            .type = V4L2_CTRL_TYPE_INTEGER,
+            .name = "auto focus range",
+            .minimum = 0,
+            .maximum = 1,
+            .step = 1,
+            .default_value = 0,
+            },
+        .tweak = ov5645_s_cont_focus,
+        .query = ov5645_g_focus_value,
+        },
+     //AE METERING
+     {
+        .qc = {
+            .id = V4L2_CID_EXPOSURE_METERING,
+            .type = V4L2_CTRL_TYPE_INTEGER,
+            .name = "auto exposure metering",
+            .minimum = 0,
+            .maximum = 1,
+            .step = 1,
+            .default_value = 0,
+            },
+        .tweak = ov5645_s_exposure_metering,
+        .query = ov5645_g_exposure_metering,
+     },
+     //Scene Mode
+     {
+        .qc = {
+            .id = V4L2_CID_SCENE_MODE,
+            .type = V4L2_CTRL_TYPE_INTEGER,
+            .name = "scene mode",
+            .minimum = 0,
+            .maximum = 1,
+            .step = 1,
+            .default_value = 0,
+            },
+        .tweak = ov5645_s_scene_mode,
+        .query = ov5645_g_scene_mode,
+        },
 };
 #define N_CONTROLS (ARRAY_SIZE(ov5645_controls))
 
@@ -1799,7 +2118,7 @@ static int ov5645_g_ctrl(struct v4l2_subdev *sd, struct v4l2_control *ctrl)
 
 	if (octrl == NULL)
 		return -EINVAL;
-
+ov5645_debug("[ov5645] %s line = %d ctrl->id = 0x%08x,octrl->qc.name = %s \n",__func__,__LINE__,ctrl->id,octrl->qc.name);
 	ret = octrl->query(sd, &ctrl->value);
 	if (ret < 0)
 		return ret;
@@ -1814,7 +2133,7 @@ static int ov5645_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *ctrl)
 
 	if (!octrl || !octrl->tweak)
 		return -EINVAL;
-
+ov5645_debug("[ov5645] %s line = %d octrl->qc.name = %s ctrl->value = 0x%08x\n",__func__,__LINE__,octrl->qc.name,ctrl->value);
 	ret = octrl->tweak(sd, ctrl->value);
 	if (ret < 0)
 		return ret;
@@ -1834,8 +2153,13 @@ static int ov5645_s_stream(struct v4l2_subdev *sd, int enable)
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	struct ov5645_device *dev = to_ov5645_sensor(sd);
 	int err;
-
+	printk("************* s_stream with ov5645 stream ==%d \n",enable);
 	if (enable) {
+		
+		err = ov5645_wakeup(sd);
+		if (err)
+			return err;
+		
 		switch (dev->run_mode) {
 		case CI_MODE_PREVIEW:
 			err = ov5645_start_preview(sd);
@@ -1851,6 +2175,11 @@ static int ov5645_s_stream(struct v4l2_subdev *sd, int enable)
 				"invalid run mode.\n");
 			return -EINVAL;
 		}
+
+		//lwl add for auto awb lock issue
+		if(whitebalance_saved == V4L2_WHITE_BALANCE_AUTO)
+			ov5645_set_wb(sd,V4L2_WHITE_BALANCE_AUTO);
+		
 		if (err)
 			dev_warn(&client->dev,
 				"fail to start preview/video/capture.\n");
@@ -1860,6 +2189,9 @@ static int ov5645_s_stream(struct v4l2_subdev *sd, int enable)
 			return err;
 
 		dev->streaming = true;
+		//err =dev->platform_data->platform_vcm(sd, 1);
+		if (err)
+			return err;
 		if (dev->focus_mode_change) {
 			err = ov5645_s_focus_mode(sd, dev->focus_mode);
 			if (err) {
@@ -1870,6 +2202,9 @@ static int ov5645_s_stream(struct v4l2_subdev *sd, int enable)
 			dev->focus_mode_change = false;
 		}
 	} else {
+		//err =dev->platform_data->platform_vcm(sd, 0);
+		if (err)
+			return err;
 		if (dev->run_mode == CI_MODE_PREVIEW) {
 			err = ov5645_stop_preview(sd);
 			if (err)
@@ -2009,7 +2344,7 @@ ov5645_set_selection(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh,
 	struct ov5645_device *dev = to_ov5645_sensor(sd);
 	int focus_width_step, focus_height_step;
 	u32 x_center, y_center;
-	int width, height;
+	int width =0, height =0;
 	int err, index;
 
 	if (sel->which != V4L2_SUBDEV_FORMAT_ACTIVE) {
@@ -2064,10 +2399,6 @@ static int
 ov5645_g_parm(struct v4l2_subdev *sd, struct v4l2_streamparm *param)
 {
 	struct ov5645_device *dev = to_ov5645_sensor(sd);
-
-	if (param->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
-		return -EINVAL;
-
 	memset(param, 0, sizeof(*param));
 	param->type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 
@@ -2085,9 +2416,6 @@ static int
 ov5645_s_parm(struct v4l2_subdev *sd, struct v4l2_streamparm *param)
 {
 	struct ov5645_device *dev = to_ov5645_sensor(sd);
-
-	if (param->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
-		return -EINVAL;
 
 	dev->run_mode = param->parm.capture.capturemode;
 	return ov5645_g_parm(sd, param);
@@ -2155,8 +2483,10 @@ static int ov5645_remove(struct i2c_client *client)
 					struct ov5645_device, sd);
 
 	dev->platform_data->csi_cfg(sd, 0);
-
+	
 	release_firmware(dev->firmware);
+	if (dev->platform_data->platform_deinit)
+		dev->platform_data->platform_deinit();
 	v4l2_device_unregister_subdev(sd);
 	media_entity_cleanup(&dev->sd.entity);
 	kfree(dev);
@@ -2169,8 +2499,6 @@ static int ov5645_probe(struct i2c_client *client,
 {
 	struct ov5645_device *dev;
 	int ret;
-
-pr_info("ov5645_probe\n");
 	/* Setup sensor configuration structure */
 	dev = kzalloc(sizeof(*dev), GFP_KERNEL);
 	if (!dev) {
@@ -2178,24 +2506,20 @@ pr_info("ov5645_probe\n");
 		return -ENOMEM;
 	}
 
-pr_info("ov5645_probe subdev init\n");
 	v4l2_i2c_subdev_init(&dev->sd, client, &ov5645_ops);
 	if (client->dev.platform_data) {
-pr_info("ov5645_probe platform data\n");
 		ret = ov5645_s_config(&dev->sd, client->irq,
 				       client->dev.platform_data);
 		if (ret) {
-pr_info("ov5645_probe err\n");
 			v4l2_device_unregister_subdev(&dev->sd);
 			kfree(dev);
 			return ret;
 		}
 	}
-pr_info("ov5645_probe plat data ok\n");
 	/*TODO add format code here*/
 	dev->sd.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
 	dev->pad.flags = MEDIA_PAD_FL_SOURCE;
-	dev->sd.entity.ops = &ov5645_entity_ops;
+	//dev->sd.entity.ops = &ov5645_entity_ops;
 
 	ret = media_entity_init(&dev->sd.entity, 1, &dev->pad, 0);
 	if (ret) {
@@ -2224,13 +2548,12 @@ static struct i2c_driver ov5645_driver = {
 		.name = OV5645_NAME,
 	},
 	.probe = ov5645_probe,
-	.remove = __exit_p(ov5645_remove),
+	.remove = ov5645_remove,
 	.id_table = ov5645_id,
 };
 
 static __init int ov5645_init_mod(void)
 {
-pr_info("ov5645_init_mod\n");
 	return i2c_add_driver(&ov5645_driver);
 }
 

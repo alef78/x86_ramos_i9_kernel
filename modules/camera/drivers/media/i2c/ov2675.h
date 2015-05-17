@@ -944,7 +944,8 @@ static struct misensor_reg const ov2675_init[] = {
 {MISENSOR_8BIT, 0x3379, 0x80},	// Sharpness th2
 
 {MISENSOR_8BIT, 0x3069, 0x84},	// BLC target
-{MISENSOR_8BIT, 0x307c, 0x13},	// mirror off, flip off
+//{MISENSOR_8BIT, 0x307c, 0x13},	// mirror off, flip on on Ramos i9
+{MISENSOR_8BIT, 0x307c, 0x10},	// mirror off, flip off
 {MISENSOR_8BIT, 0x3087, 0x02},	// BLC always on
 
 {MISENSOR_8BIT, 0x3300, 0xfc},	// ISP on, gamma on, AWB stat on, AWB gain on, Lenc on, Lenc low light on, ISP format = YUV

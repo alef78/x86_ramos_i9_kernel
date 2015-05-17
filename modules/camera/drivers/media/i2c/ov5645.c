@@ -1209,12 +1209,12 @@ static int __ov5645_init(struct v4l2_subdev *sd)
 	if (ret)
 		return ret;
 
+	ret = ov5645_write_reg_array(client, booyi_init);
 	/*
 	 * delay 5ms to wait for sensor initialization finish.
 	 */
 	usleep_range(5000, 6000);
 	
-	ret = ov5645_write_reg_array(client, booyi_init);
 
 	ret = ov5645_af_init(sd);
 	if (ret)

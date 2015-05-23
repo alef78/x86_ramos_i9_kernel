@@ -859,7 +859,7 @@ static int ov5645_set_bandingfilter(struct v4l2_subdev *sd)
 }
 
 /* stable in high */
-static int ov5645_set_ae_target(struct v4l2_subdev *sd, unsigned int target)
+static int ov5645_set_exposure(struct v4l2_subdev *sd, unsigned int target)
 {
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	struct ov5645_device *dev = to_ov5645_sensor(sd);
@@ -960,6 +960,8 @@ static int ov5645_set_awb_gain_mode(struct v4l2_subdev *sd, int mode)
 	return err;
 }
 
+static int ov5645_set_whitebalance(struct v4l2_subdev *sd, s32  val);
+
 static int ov5645_start_preview(struct v4l2_subdev *sd)
 {
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
@@ -967,14 +969,14 @@ static int ov5645_start_preview(struct v4l2_subdev *sd)
 	int ret;
 	dev->preview_ag_ae = false;
 	u32 retvalue;
-#if 1
+#if 0
 	ret = ov5645_set_awb_gain_mode(sd, OV5645_AWB_GAIN_AUTO);
 	if (ret)
 		return ret;
 #endif
-	//ret = ov5645_set_gain16(sd, dev->preview_gain16);
-	//if (ret)
-	//	return ret;
+	ret = ov5645_set_gain16(sd, dev->preview_gain16);
+	if (ret)
+		return ret;
 
 	ret = ov5645_set_shutter(sd, dev->preview_shutter);
 	if (ret)
@@ -987,7 +989,7 @@ static int ov5645_start_preview(struct v4l2_subdev *sd)
 	ret = ov5645_set_bandingfilter(sd);
 	if (ret)
 		return ret;
-	ret = ov5645_set_ae_target(sd, OV5645_AE_TARGET);
+	ret = ov5645_set_exposure(sd, OV5645_AE_TARGET);
 	if (ret)
 		return ret;
 	if (ov5645_read_reg(client, MISENSOR_8BIT,
@@ -997,6 +999,19 @@ static int ov5645_start_preview(struct v4l2_subdev *sd)
 	}
 
 	dev_info(&client->dev, "preview 0x5583 ret = 0x%x\n", retvalue);
+	//TODO - param should be not constant here
+	ov5645_set_whitebalance(sd,V4L2_WHITE_BALANCE_AUTO);
+	if (ov5645_read_reg(client, MISENSOR_8BIT,
+		0x3a00, &retvalue)) {
+		ret = ov5645_write_reg(client, MISENSOR_8BIT,
+						0x3c00, 4);
+		ret = ov5645_write_reg(client, MISENSOR_8BIT,
+						0x3c01, 0x80);
+		ret = ov5645_write_reg(client, MISENSOR_8BIT,
+						0x3a00, retvalue | 0x20);
+
+	}
+
 	return ov5645_set_night_mode(sd, dev->night_mode);
 }
 
@@ -1054,7 +1069,7 @@ static int ov5645_start_video(struct v4l2_subdev *sd)
 	if (err)
 		return err;
 
-	err = ov5645_set_ae_target(sd, OV5645_AE_TARGET);
+	err = ov5645_set_exposure(sd, OV5645_AE_TARGET);
 	if (err)
 		return err;
 
@@ -1208,6 +1223,27 @@ static int __ov5645_init(struct v4l2_subdev *sd)
 	ret = ov5645_write_reg_array(client, ov5645_init);
 	if (ret)
 		return ret;
+	
+	ret = ov5645_write_reg(client, MISENSOR_8BIT,
+				OV5645_REG_SYS_RESET, 0);
+	if (ret)
+		return ret;
+	ret = ov5645_write_reg(client, MISENSOR_8BIT,
+				0x3004, 0x10);
+	if (ret)
+		return ret;
+	ret = ov5645_write_reg_array(client, ov5645_otp_buffer_init);
+	if (ret)
+		return ret;
+	ret = ov5645_write_reg(client, MISENSOR_8BIT,
+				0x3D21, 0x1);
+	if (ret)
+		return ret;
+//TODO: read_back_otp_group
+	ret = ov5645_write_reg_array(client, ov5645_otp_buffer_init);
+	if (ret)
+		return ret;
+
 
 	ret = ov5645_write_reg_array(client, booyi_init);
 	/*
@@ -1674,35 +1710,35 @@ static int ov5645_s_exposure(struct v4l2_subdev *sd, s32 exposure)
     switch (exposure) {
      case -3:
         target = OV5645_AE_TARGET/ 8;
-        err=ov5645_set_ae_target(sd,target);
+        err=ov5645_set_exposure(sd,target);
         break;
      case -2:
         target = OV5645_AE_TARGET/4;
-        err=ov5645_set_ae_target(sd,target);
+        err=ov5645_set_exposure(sd,target);
         break;
      case -1:
         target = OV5645_AE_TARGET/2;
-        err=ov5645_set_ae_target(sd,target);
+        err=ov5645_set_exposure(sd,target);
         break;
 
      case 0:
         target = OV5645_AE_TARGET;
-        err=ov5645_set_ae_target(sd,target);
+        err=ov5645_set_exposure(sd,target);
         break;
 
      case 1:
         target = OV5645_AE_TARGET*2;
-        err=ov5645_set_ae_target(sd,target);
+        err=ov5645_set_exposure(sd,target);
         break;
 
      case 2:
         target = OV5645_AE_TARGET*4;
-        err=ov5645_set_ae_target(sd,target);
+        err=ov5645_set_exposure(sd,target);
         break;
 
      case 3:
         target = OV5645_AE_TARGET*8;
-        err=ov5645_set_ae_target(sd,target);
+        err=ov5645_set_exposure(sd,target);
         break;
      default:
         dev_err(&client->dev, "invalid color exposure.\n");
@@ -1726,7 +1762,7 @@ static int ov5645_g_exposure(struct v4l2_subdev *sd, s32 *exposure)
 
 //AWB
 
-static int ov5645_set_wb(struct v4l2_subdev *sd, s32  val)
+static int ov5645_set_whitebalance(struct v4l2_subdev *sd, s32  val)
 {
     struct i2c_client *c = v4l2_get_subdevdata(sd);
     const struct misensor_reg *regs = NULL;
@@ -1748,7 +1784,7 @@ static int ov5645_set_wb(struct v4l2_subdev *sd, s32  val)
         break;
     case V4L2_WHITE_BALANCE_DAYLIGHT:
         ov5645_debug(" George *****V4L2_WHITE_BALANCE_DAYLIGHT******\n");
-        regs = ov5645_wb_daylight;
+        regs = ov5645_wb_sunny;
         break;
     case V4L2_WHITE_BALANCE_FLUORESCENT:
         ov5645_debug(" George *****V4L2_WHITE_BALANCE_FLUORESCENT******\n");
@@ -2041,7 +2077,7 @@ static struct ov5645_control ov5645_controls[] = {
             .step = 1,
             .default_value = 0,
         },
-        .tweak = ov5645_set_wb,
+        .tweak = ov5645_set_whitebalance,
         .query = ov5645_get_wb,
      },
      
@@ -2178,7 +2214,7 @@ static int ov5645_s_stream(struct v4l2_subdev *sd, int enable)
 
 		//lwl add for auto awb lock issue
 		if(whitebalance_saved == V4L2_WHITE_BALANCE_AUTO)
-			ov5645_set_wb(sd,V4L2_WHITE_BALANCE_AUTO);
+			ov5645_set_whitebalance(sd,V4L2_WHITE_BALANCE_AUTO);
 		
 		if (err)
 			dev_warn(&client->dev,

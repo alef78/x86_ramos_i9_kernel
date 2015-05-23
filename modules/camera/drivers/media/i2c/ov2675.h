@@ -177,6 +177,7 @@
 
 /* Supported resolutions */
 enum {
+	OV2675_RES_QCIF,
 	OV2675_RES_VGA,
 	OV2675_RES_480P,
 	OV2675_RES_720P,
@@ -201,6 +202,8 @@ enum {
 #define OV2675_RES_480P_SIZE_V		480
 #define OV2675_RES_VGA_SIZE_H		640
 #define OV2675_RES_VGA_SIZE_V		480
+#define OV2675_RES_QCIF_SIZE_H		176
+#define OV2675_RES_QCIF_SIZE_V		144
 #define OV2675_RES_SVGA_SIZE_H	800
 #define OV2675_RES_SVGA_SIZE_V	600
 #define OV2675_RES_360P_SIZE_H		640
@@ -307,6 +310,16 @@ struct ov2675_control {
 static struct ov2675_res_struct ov2675_res[] = {
 	
 	{
+	.desc	= "QCIF",
+	.res	= OV2675_RES_QCIF,
+	.width	= 176,
+	.height	= 144,
+	.fps	= 30,
+	.used	= 0,
+	.regs	= NULL,
+	.skip_frames = 8,
+	},
+	{
 	.desc	= "VGA",
 	.res	= OV2675_RES_VGA,
 	.width	= 640,
@@ -314,7 +327,7 @@ static struct ov2675_res_struct ov2675_res[] = {
 	.fps	= 30,
 	.used	= 0,
 	.regs	= NULL,
-	.skip_frames = 12,
+	.skip_frames = 10,
 	},
 	{
 	.desc	= "480P",
@@ -324,17 +337,7 @@ static struct ov2675_res_struct ov2675_res[] = {
 	.fps	= 30,
 	.used	= 0,
 	.regs	= NULL,
-	.skip_frames = 5,
-	},
-	{
-	.desc	= "720p",
-	.res	= OV2675_RES_720P,
-	.width	= 1280,
-	.height	= 720,
-	.fps	= 30,
-	.used	= 0,
-	.regs	= NULL,
-	.skip_frames = 6,
+	.skip_frames = 11,
 	},
 	{
 	.desc	= "1M",
@@ -347,6 +350,16 @@ static struct ov2675_res_struct ov2675_res[] = {
 	.skip_frames = 3,
 	},
 	{
+	.desc	= "720p",
+	.res	= OV2675_RES_720P,
+	.width	= 1280,
+	.height	= 720,
+	.fps	= 30,
+	.used	= 0,
+	.regs	= NULL,
+	.skip_frames = 14,
+	},
+	{
 	.desc	= "2M",
 	.res	= OV2675_RES_2M,
 	.width	= 1600,
@@ -354,7 +367,7 @@ static struct ov2675_res_struct ov2675_res[] = {
 	.fps	= 15,
 	.used	= 0,
 	.regs	= NULL,
-	.skip_frames = 4,
+	.skip_frames = 5,
 	},
 };
 #define N_RES (ARRAY_SIZE(ov2675_res))
@@ -472,8 +485,9 @@ static struct misensor_reg const ov2675_2M_init[] = {
 {MISENSOR_8BIT, 0x3072, 0x9b},	// B60
 {MISENSOR_8BIT, 0x301c, 0x06},	// max step 50
 {MISENSOR_8BIT, 0x301d, 0x07},	// max step 60
-//michael cong add for effect
-{MISENSOR_8BIT, 0x3362, 0x80},
+
+{MISENSOR_8BIT, 0x3373, 0x90},	// 
+{MISENSOR_8BIT, 0x338b, 0x0c},	// 
 
 {MISENSOR_TOK_TERM, 0, 0}
 };
@@ -522,8 +536,6 @@ static struct misensor_reg const ov2675_1M_init[] = {
 {MISENSOR_8BIT, 0x3072, 0x4d},	// B60
 {MISENSOR_8BIT, 0x301c, 0x0c},	// max step 50
 {MISENSOR_8BIT, 0x301d, 0x0f},	// max step 60
-//michael cong add for effect
-{MISENSOR_8BIT, 0x3362, 0x80},
 
 {MISENSOR_TOK_TERM, 0, 0}
 };
@@ -572,8 +584,6 @@ static struct misensor_reg const ov2675_720p_init[] = {
 {MISENSOR_8BIT, 0x3072, 0x9b},	// B60
 {MISENSOR_8BIT, 0x301c, 0x06},	// max step 50
 {MISENSOR_8BIT, 0x301d, 0x07},	// max step 60
-//michael cong add for effect
-{MISENSOR_8BIT, 0x3362, 0x80},
 
 {MISENSOR_TOK_TERM, 0, 0}
 };
@@ -597,8 +607,8 @@ static struct misensor_reg const ov2675_480p_init[] = {
 {MISENSOR_8BIT, 0x308a, 0x02},	// ISP YOUT = 600
 {MISENSOR_8BIT, 0x308b, 0x58},	// ISP YOUT
 {MISENSOR_8BIT, 0x3316, 0x64},	// Scale X input = 1600
-{MISENSOR_8BIT, 0x3317, 0x1e},	// Scale Y input = 480
-{MISENSOR_8BIT, 0x3318, 0x00},	// Scale Y/X input
+{MISENSOR_8BIT, 0x3317, 0x21},	// Scale Y input = 480
+{MISENSOR_8BIT, 0x3318, 0x50},	// Scale Y/X input
 {MISENSOR_8BIT, 0x3319, 0x08},	// Scale X offset = 8
 {MISENSOR_8BIT, 0x331a, 0x64},	// Scale X output = 1600
 {MISENSOR_8BIT, 0x331b, 0x4b},	// Scale Y output = 1200
@@ -627,9 +637,6 @@ static struct misensor_reg const ov2675_480p_init[] = {
 {MISENSOR_8BIT, 0x3072, 0x9a},	// B60
 {MISENSOR_8BIT, 0x301c, 0x02},	// max step 50
 {MISENSOR_8BIT, 0x301d, 0x03},	// max step 60
-//michael cong add for effect
-{MISENSOR_8BIT, 0x3362, 0x80},
-
 {MISENSOR_TOK_TERM, 0, 0}
 };
 
@@ -638,7 +645,7 @@ static struct misensor_reg const ov2675_vga_init[] = {
 {MISENSOR_8BIT, 0x3012, 0x10}, 	// SVGA Average mode
 
 {MISENSOR_8BIT, 0x302a, 0x02}, 	// VTS = 696
-{MISENSOR_8BIT, 0x302b, 0xb8}, 	// VTS
+{MISENSOR_8BIT, 0x302b, 0xe5}, 	// VTS
 {MISENSOR_8BIT, 0x306f, 0x14}, 	// BLC target for short exposure of HDR mode
 {MISENSOR_8BIT, 0x3020, 0x01}, 	// HS = 280
 {MISENSOR_8BIT, 0x3021, 0x18}, 	// HS
@@ -664,6 +671,8 @@ static struct misensor_reg const ov2675_vga_init[] = {
 {MISENSOR_8BIT, 0x331c, 0x00}, 	// Scale Y/X output
 {MISENSOR_8BIT, 0x331d, 0x38}, 	// Scale Y offset = 3, Scale X offset = 8
 {MISENSOR_8BIT, 0x3302, 0x11}, 	// Scale on, UV Average on
+{MISENSOR_8BIT, 0x338d, 0x80},
+{MISENSOR_8BIT, 0x3373, 0x60},
 {MISENSOR_8BIT, 0x3088, 0x02}, 	// ISP X output = 640
 {MISENSOR_8BIT, 0x3089, 0x80}, 	// ISP X output
 {MISENSOR_8BIT, 0x308a, 0x01}, 	// ISP Y output = 480
@@ -679,24 +688,23 @@ static struct misensor_reg const ov2675_vga_init[] = {
 {MISENSOR_8BIT, 0x302d, 0x00},	// EXVTS = 0
 {MISENSOR_8BIT, 0x302e, 0x00},	// EXVTS
 {MISENSOR_8BIT, 0x302c, 0x00},	// EXHTS = 0
-//{MISENSOR_8BIT, 0x3014, 0x8c},	// B60
+{MISENSOR_8BIT, 0x3014, 0x8c},	// B60
 {MISENSOR_8BIT, 0x3070, 0xd2},	// B50
 {MISENSOR_8BIT, 0x3072, 0xaf},	// B60
 {MISENSOR_8BIT, 0x301c, 0x02},	// max step 50
 {MISENSOR_8BIT, 0x301d, 0x03},	// max step 60
-//michael cong add for effect
-{MISENSOR_8BIT, 0x3362, 0x90},
 
 {MISENSOR_TOK_TERM, 0, 0}
 };
 
 /* camera svga 30fps, yuv, 2lanes */
-static struct misensor_reg const ov2675_svga_init[] = {
+//TODO: qcif init
+static struct misensor_reg const ov2675_qcif_init[] = {
 {MISENSOR_8BIT, 0x3012, 0x10}, 	// SVGA Average mode
 //{MISENSOR_8BIT, 0x3028, 0x07},	// HTS[15:8]
 //{MISENSOR_8BIT, 0x3029, 0x94},	// HTS
-{MISENSOR_8BIT, 0x302a, 0x08}, 	// VTS = 618
-{MISENSOR_8BIT, 0x302b, 0x80}, 	// VTS
+{MISENSOR_8BIT, 0x302a, 0x02}, 	// VTS = 618
+{MISENSOR_8BIT, 0x302b, 0xe5}, 	// VTS
 {MISENSOR_8BIT, 0x306f, 0x14}, 	// BLC target for short exposure in HDR mode
 {MISENSOR_8BIT, 0x3020, 0x01}, 	// HS = 280
 {MISENSOR_8BIT, 0x3021, 0x18}, 	// HS
@@ -706,10 +714,13 @@ static struct misensor_reg const ov2675_svga_init[] = {
 {MISENSOR_8BIT, 0x3025, 0x58}, 	// HW
 {MISENSOR_8BIT, 0x3026, 0x02}, 	// VH = 609
 {MISENSOR_8BIT, 0x3027, 0x61}, 	// VH
-{MISENSOR_8BIT, 0x3088, 0x03}, 	// ISP XOUT = 800
-{MISENSOR_8BIT, 0x3089, 0x20}, 	// ISP XOUT
-{MISENSOR_8BIT, 0x308a, 0x02}, 	// ISP YOUT = 600
-{MISENSOR_8BIT, 0x308b, 0x58}, 	// ISP YOUT
+{MISENSOR_8BIT, 0x3088, 0x02}, 	// ISP XOUT = 800
+{MISENSOR_8BIT, 0x3089, 0x80}, 	// ISP XOUT
+{MISENSOR_8BIT, 0x308a, 0x01}, 	// ISP YOUT = 600
+{MISENSOR_8BIT, 0x308b, 0xe0}, 	// ISP YOUT
+{MISENSOR_8BIT, 0x3313, 0x0}, 	
+{MISENSOR_8BIT, 0x3314, 0x0}, 	
+{MISENSOR_8BIT, 0x3315, 0x0}, 	
 {MISENSOR_8BIT, 0x3316, 0x64}, 	// Scale X input = 1600
 {MISENSOR_8BIT, 0x3317, 0x25}, 	// Scale Y input = 600
 {MISENSOR_8BIT, 0x3318, 0x80}, 	// Scale Y/X input
@@ -719,30 +730,36 @@ static struct misensor_reg const ov2675_svga_init[] = {
 {MISENSOR_8BIT, 0x331c, 0x00}, 	// Scale Y/X output
 {MISENSOR_8BIT, 0x331d, 0x38}, 	// Scale Y offset = 3, Scale X offset = 8
 {MISENSOR_8BIT, 0x3302, 0x11}, 	// Scale on, UV average on
-{MISENSOR_8BIT, 0x3088, 0x03}, 	// ISP X output = 800
-{MISENSOR_8BIT, 0x3089, 0x20}, 	// ISP X output
-{MISENSOR_8BIT, 0x308a, 0x02}, 	// ISP Y output = 600
-{MISENSOR_8BIT, 0x308b, 0x58}, 	// ISP Y output
-{MISENSOR_8BIT, 0x3313, 0x00},  
-{MISENSOR_8BIT, 0x3314, 0x00},  
-{MISENSOR_8BIT, 0x3315, 0x00},  
-{MISENSOR_8BIT, 0x331a, 0x32}, 	
-{MISENSOR_8BIT, 0x331b, 0x25}, 	
-{MISENSOR_8BIT, 0x331c, 0x80},  
-{MISENSOR_8BIT, 0x300e, 0x31},  // PLL
+{MISENSOR_8BIT, 0x338d, 0x80}, 	
+{MISENSOR_8BIT, 0x3373, 0x60}, 	
+{MISENSOR_8BIT, 0x3088, 0x02}, 	// ISP X output = 800
+{MISENSOR_8BIT, 0x3089, 0x80}, 	// ISP X output
+{MISENSOR_8BIT, 0x308a, 0x01}, 	// ISP Y output = 600
+{MISENSOR_8BIT, 0x308b, 0xE0}, 	// ISP Y output
+{MISENSOR_8BIT, 0x3640, 0x10}, 	
+{MISENSOR_8BIT, 0x331a, 0x28}, 	
+{MISENSOR_8BIT, 0x331b, 0x1e}, 	
+{MISENSOR_8BIT, 0x331c, 0x00},  
+{MISENSOR_8BIT, 0x300e, 0x2f},  // PLL
 {MISENSOR_8BIT, 0x300f, 0xa6},	// PLL
 {MISENSOR_8BIT, 0x3010, 0x81},	// PLL
 {MISENSOR_8BIT, 0x3011, 0x00},	// clock divider
 {MISENSOR_8BIT, 0x302d, 0x00},	// EXVTS = 0
 {MISENSOR_8BIT, 0x302e, 0x00},	// EXVTS
 {MISENSOR_8BIT, 0x302c, 0x00},	// EXHTS = 0
-{MISENSOR_8BIT, 0x3070, 0xba},	// B50
-{MISENSOR_8BIT, 0x3072, 0x9a},	// B60
+{MISENSOR_8BIT, 0x3014, 0x8c},  
+{MISENSOR_8BIT, 0x3070, 0xd2},	// B50
+{MISENSOR_8BIT, 0x3072, 0xaf},	// B60
 {MISENSOR_8BIT, 0x301c, 0x02},	// max step 50
 {MISENSOR_8BIT, 0x301d, 0x03},	// max step 60
-//michael cong add for effect
-{MISENSOR_8BIT, 0x3362, 0x90},
 
+{MISENSOR_8BIT, 0x3088, 0x0},  
+{MISENSOR_8BIT, 0x3089, 0xb0},  
+{MISENSOR_8BIT, 0x308a, 0x0},  
+{MISENSOR_8BIT, 0x308b, 0x90},  
+{MISENSOR_8BIT, 0x3316, 0x5b},  
+{MISENSOR_8BIT, 0x3317, 0x25},  
+{MISENSOR_8BIT, 0x3318, 0x8a},  
 {MISENSOR_TOK_TERM, 0, 0}
 };
 
@@ -757,7 +774,7 @@ static struct misensor_reg const ov2675_iq[] = {
 static struct misensor_reg const ov2675_init[] = {
 	/* init software */
 {MISENSOR_8BIT, 0x3012, 0x80},	//Soft Reset
-{MISENSOR_TOK_DELAY, {0}, 5},
+{MISENSOR_TOK_DELAY, 0, 5},
 
 {MISENSOR_8BIT, 0x3086, 0x0f},	//stream off
 {MISENSOR_8BIT, 0x308c, 0x80},	// timing control
@@ -771,12 +788,12 @@ static struct misensor_reg const ov2675_init[] = {
 {MISENSOR_8BIT, 0x3010, 0x81},	// PLL
 {MISENSOR_8BIT, 0x3082, 0x01},  
 {MISENSOR_8BIT, 0x30f4, 0x01},  
-{MISENSOR_8BIT, 0x3090, 0x3b},  
+{MISENSOR_8BIT, 0x3090, 0x33},  
 {MISENSOR_8BIT, 0x3091, 0xc0},  
 {MISENSOR_8BIT, 0x30ac, 0x42},  
 {MISENSOR_8BIT, 0x30d1, 0x08},  
 {MISENSOR_8BIT, 0x30a8, 0x56},  
-{MISENSOR_8BIT, 0x3015, 0x33},	// VAEC ceiling, 3 frames
+{MISENSOR_8BIT, 0x3015, 0x03},	// VAEC ceiling, 3 frames
 {MISENSOR_8BIT, 0x3093, 0x00},  //
 {MISENSOR_8BIT, 0x307e, 0xe5},	// apply digital gain if gain >=8x, digital gain from AGC[7:6]
 {MISENSOR_8BIT, 0x3079, 0x00},  
@@ -809,13 +826,13 @@ static struct misensor_reg const ov2675_init[] = {
 {MISENSOR_8BIT, 0x304f, 0x20},  
 {MISENSOR_8BIT, 0x30a3, 0x10},  
 {MISENSOR_8BIT, 0x3013, 0xf7},	// fast AEC, big step, Banding filter on, auto banding disable under strong light, less than 1 line off
-{MISENSOR_8BIT, 0x3014, 0x8c},  // manual 60Hz, band depend on 50/60 detect, night mode off, 50/60 smooth switch, 
+{MISENSOR_8BIT, 0x3014, 0x4c},  // manual 60Hz, band depend on 50/60 detect, night mode off, 50/60 smooth switch, 
 {MISENSOR_8BIT, 0x3071, 0x00},	// BD50[15:8]
-{MISENSOR_8BIT, 0x3070, 0xd2},	// BD50[7:0]
+{MISENSOR_8BIT, 0x3070, 0x3e},	// BD50[7:0]
 {MISENSOR_8BIT, 0x3073, 0x00},	// BD60[15:8]
-{MISENSOR_8BIT, 0x3072, 0xaf},	// BD60[7:0]
-{MISENSOR_8BIT, 0x301c, 0x02},	// 50Hz max band
-{MISENSOR_8BIT, 0x301d, 0x03}, 	// 60Hz max band
+{MISENSOR_8BIT, 0x3072, 0x34},	// BD60[7:0]
+{MISENSOR_8BIT, 0x301c, 0x12},	// 50Hz max band
+{MISENSOR_8BIT, 0x301d, 0x16}, 	// 60Hz max band
 {MISENSOR_8BIT, 0x304d, 0x42},    
 {MISENSOR_8BIT, 0x304a, 0x40},  
 {MISENSOR_8BIT, 0x304f, 0x40},  
@@ -973,85 +990,6 @@ static struct misensor_reg const ov2675_init[] = {
 {MISENSOR_8BIT, 0x3010, 0x82},	// scale_div_man
 {MISENSOR_8BIT, 0x3011, 0x03},	// sys_div /4
 {MISENSOR_8BIT, 0x3634, 0x26},  //
-//michael cong add for effect
-//shading
-{MISENSOR_8BIT, 0x3350, 0x30},	
-{MISENSOR_8BIT, 0x3351, 0x26},
-{MISENSOR_8BIT, 0x3352, 0x0c},
-{MISENSOR_8BIT, 0x3353, 0x35},
-{MISENSOR_8BIT, 0x3354, 0x00},
-{MISENSOR_8BIT, 0x3355, 0x85},		
-{MISENSOR_8BIT, 0x3356, 0x30},
-{MISENSOR_8BIT, 0x3357, 0x26},
-{MISENSOR_8BIT, 0x3358, 0x08},
-{MISENSOR_8BIT, 0x3359, 0x2c},
-{MISENSOR_8BIT, 0x335a, 0x00},
-{MISENSOR_8BIT, 0x335b, 0x85},		 
-{MISENSOR_8BIT, 0x335c, 0x2f},
-{MISENSOR_8BIT, 0x335d, 0x25},
-{MISENSOR_8BIT, 0x335e, 0x88},	
-{MISENSOR_8BIT, 0x335f, 0x2a},
-{MISENSOR_8BIT, 0x3360, 0x00},
-{MISENSOR_8BIT, 0x3361, 0x85},
-//awb
-{MISENSOR_8BIT, 0x3320, 0xfa},
-{MISENSOR_8BIT, 0x3321, 0x11},
-{MISENSOR_8BIT, 0x3322, 0x92},
-{MISENSOR_8BIT, 0x3323, 0x05},
-{MISENSOR_8BIT, 0x3324, 0x97},
-{MISENSOR_8BIT, 0x3325, 0x02},
-{MISENSOR_8BIT, 0x3326, 0xff},
-{MISENSOR_8BIT, 0x3327, 0x0f},
-{MISENSOR_8BIT, 0x3328, 0x14},
-{MISENSOR_8BIT, 0x3329, 0x18},
-{MISENSOR_8BIT, 0x332a, 0x61},
-{MISENSOR_8BIT, 0x332b, 0x56},
-{MISENSOR_8BIT, 0x332c, 0x94},
-{MISENSOR_8BIT, 0x332d, 0x9e},
-{MISENSOR_8BIT, 0x332e, 0x3d},
-{MISENSOR_8BIT, 0x332f, 0x34},
-{MISENSOR_8BIT, 0x3330, 0x4f},
-{MISENSOR_8BIT, 0x3331, 0x44},
-{MISENSOR_8BIT, 0x3332, 0xf8},
-{MISENSOR_8BIT, 0x3333, 0x0a},
-{MISENSOR_8BIT, 0x3334, 0xf0},
-{MISENSOR_8BIT, 0x3335, 0xf0},
-{MISENSOR_8BIT, 0x3336, 0xf0},
-{MISENSOR_8BIT, 0x3337, 0x40},
-{MISENSOR_8BIT, 0x3338, 0x40},
-{MISENSOR_8BIT, 0x3339, 0x40},
-{MISENSOR_8BIT, 0x333a, 0x00},
-{MISENSOR_8BIT, 0x333b, 0x00},
-//gamma
-{MISENSOR_8BIT, 0x3340, 0x07}, 
-{MISENSOR_8BIT, 0x3341, 0x0F},
-{MISENSOR_8BIT, 0x3342, 0x1F},
-{MISENSOR_8BIT, 0x3343, 0x2E},
-{MISENSOR_8BIT, 0x3344, 0x3C},
-{MISENSOR_8BIT, 0x3345, 0x49},
-{MISENSOR_8BIT, 0x3346, 0x56},
-{MISENSOR_8BIT, 0x3347, 0x62},
-{MISENSOR_8BIT, 0x3348, 0x6B},
-{MISENSOR_8BIT, 0x3349, 0x7E},
-{MISENSOR_8BIT, 0x334A, 0x8E},
-{MISENSOR_8BIT, 0x334B, 0x9C},
-{MISENSOR_8BIT, 0x334C, 0xB6},
-{MISENSOR_8BIT, 0x334D, 0xCB},
-{MISENSOR_8BIT, 0x334E, 0xDF},
-{MISENSOR_8BIT, 0x334F, 0x2C},
-//matrix
-{MISENSOR_8BIT, 0x3380, 0x24}, 
-{MISENSOR_8BIT, 0x3381, 0x55},
-{MISENSOR_8BIT, 0x3382, 0x07},
-{MISENSOR_8BIT, 0x3383, 0x24},
-{MISENSOR_8BIT, 0x3384, 0xC8},
-{MISENSOR_8BIT, 0x3385, 0xEC},
-{MISENSOR_8BIT, 0x3386, 0xDD},
-{MISENSOR_8BIT, 0x3387, 0xE8},
-{MISENSOR_8BIT, 0x3388, 0x0B},
-{MISENSOR_8BIT, 0x3389, 0x98},
-{MISENSOR_8BIT, 0x338A, 0x00},
-//end
 
 {MISENSOR_8BIT, 0x3086, 0x0f},	//sleep on
 {MISENSOR_8BIT, 0x3086, 0x00},	//sleep off

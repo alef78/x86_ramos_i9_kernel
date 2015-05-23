@@ -487,25 +487,25 @@ static struct misensor_reg const ov5645_wb_auto[] = {
 static struct misensor_reg const ov5645_wb_incandescent[] = {
      {MISENSOR_8BIT, 0x3212, 0x03}, // start group 3 		//office 
      {MISENSOR_8BIT, 0x3406, 0x01},
-     {MISENSOR_8BIT, 0x3400, 0x05},
-     {MISENSOR_8BIT, 0x3401, 0x48},
+     {MISENSOR_8BIT, 0x3400, 0x04},
+     {MISENSOR_8BIT, 0x3401, 0x10},
      {MISENSOR_8BIT, 0x3402, 0x04},
      {MISENSOR_8BIT, 0x3403, 0x00},
-     {MISENSOR_8BIT, 0x3404, 0x07},
-     {MISENSOR_8BIT, 0x3405, 0xcf},
+     {MISENSOR_8BIT, 0x3404, 0x08},
+     {MISENSOR_8BIT, 0x3405, 0x40},
      {MISENSOR_8BIT, 0x3212, 0x13}, // end group 3
      {MISENSOR_8BIT, 0x3212, 0xa3}, // lanuch group 3
      {MISENSOR_TOK_TERM, 0, 0}
 };
-static struct misensor_reg const ov5645_wb_daylight[] = {
+static struct misensor_reg const ov5645_wb_sunny[] = {
      {MISENSOR_8BIT, 0x3212, 0x03}, // start group 3   sunny
      {MISENSOR_8BIT, 0x3406, 0x01},
-     {MISENSOR_8BIT, 0x3400, 0x06},
-     {MISENSOR_8BIT, 0x3401, 0x20},
+     {MISENSOR_8BIT, 0x3400, 0x05},
+     {MISENSOR_8BIT, 0x3401, 0xde},
      {MISENSOR_8BIT, 0x3402, 0x04},
      {MISENSOR_8BIT, 0x3403, 0x00},
-     {MISENSOR_8BIT, 0x3404, 0x03},
-     {MISENSOR_8BIT, 0x3405, 0xf3},
+     {MISENSOR_8BIT, 0x3404, 0x04},
+     {MISENSOR_8BIT, 0x3405, 0x68},
      {MISENSOR_8BIT, 0x3212, 0x13}, // end group 3
      {MISENSOR_8BIT, 0x3212, 0xa3}, // lanuch group 3
      {MISENSOR_TOK_TERM, 0, 0}
@@ -514,11 +514,11 @@ static struct misensor_reg const ov5645_wb_cloudy[] = {
      {MISENSOR_8BIT, 0x3212, 0x03}, // start group 3
      {MISENSOR_8BIT, 0x3406, 0x01},
      {MISENSOR_8BIT, 0x3400, 0x06},
-     {MISENSOR_8BIT, 0x3401, 0x48},
+     {MISENSOR_8BIT, 0x3401, 0x40},
      {MISENSOR_8BIT, 0x3402, 0x04},
      {MISENSOR_8BIT, 0x3403, 0x00},
      {MISENSOR_8BIT, 0x3404, 0x04},
-     {MISENSOR_8BIT, 0x3405, 0xd3},
+     {MISENSOR_8BIT, 0x3405, 0xe3},
      {MISENSOR_8BIT, 0x3212, 0x13}, // end group 3
      {MISENSOR_8BIT, 0x3212, 0xa3}, // lanuch group 3
      {MISENSOR_TOK_TERM, 0, 0}
@@ -526,12 +526,12 @@ static struct misensor_reg const ov5645_wb_cloudy[] = {
 static struct misensor_reg const ov5645_wb_fluorescent[] = {
      {MISENSOR_8BIT, 0x3212, 0x03}, // start group 3 home
      {MISENSOR_8BIT, 0x3406, 0x01},
-     {MISENSOR_8BIT, 0x3400, 0x04},
-     {MISENSOR_8BIT, 0x3401, 0x10},
+     {MISENSOR_8BIT, 0x3400, 0x05},
+     {MISENSOR_8BIT, 0x3401, 0x27},
      {MISENSOR_8BIT, 0x3402, 0x04},
      {MISENSOR_8BIT, 0x3403, 0x00},
-     {MISENSOR_8BIT, 0x3404, 0x08},
-     {MISENSOR_8BIT, 0x3405, 0x40},
+     {MISENSOR_8BIT, 0x3404, 0x07},
+     {MISENSOR_8BIT, 0x3405, 0x44},
      {MISENSOR_8BIT, 0x3212, 0x13}, // end group 3
      {MISENSOR_8BIT, 0x3212, 0xa3}, // lanuch group 3
      {MISENSOR_TOK_TERM, 0, 0}
@@ -653,8 +653,8 @@ static struct misensor_reg const ov5645_wakeup_reg[] = {
 static struct misensor_reg const ov5645_normal_effect[] = {
 	{MISENSOR_8BIT, 0x3212, 0x03},	/* start group 3 */
 	{MISENSOR_8BIT, 0x5580, 0x06},
-	{MISENSOR_8BIT, 0x5583, 0x40},	/* sat U */
-	{MISENSOR_8BIT, 0x5584, 0x10},	/* sat V */
+	{MISENSOR_8BIT, 0x5583, 0x3e},	/* sat U */
+	{MISENSOR_8BIT, 0x5584, 0x2e},	/* sat V */
 	{MISENSOR_8BIT, 0x5003, 0x08},
 	{MISENSOR_8BIT, 0x3212, 0x13},	/* end group 3 */
 	{MISENSOR_8BIT, 0x3212, 0xA3},	/* lanuch group 3 */
@@ -1685,6 +1685,44 @@ static struct misensor_reg const ov5645_common[] = {
 static struct misensor_reg const ov5645_iq[] = {
 	{MISENSOR_TOK_TERM, 0, 0}
 };
+
+static struct misensor_reg const ov5645_otp_buffer_init[] = {
+ {1, 0x3D00, 0},
+ {1, 0x3D01, 0},
+             {1, 0x3D02, 0},
+                 {1, 0x3D03, 0},
+                 {1, 0x3D04, 0},
+                 {1, 0x3D05, 0},
+     {1, 0x3D06, 0},
+                 {1, 0x3D07, 0},
+     {1, 0x3D08, 0},
+
+             {1, 0x3D09, 0},
+             {1, 0x3D0A, 0},
+                 {1, 0x3D0B, 0},
+                 {1, 0x3D0C, 0},
+                 {1, 0x3D0D, 0},
+                 {1, 0x3D0E, 0},
+                 {1, 0x3D0F, 0},
+                 {1, 0x3D10, 0},
+                 {1, 0x3D11, 0},
+                 {1, 0x3D12, 0},
+                 {1, 0x3D13, 0},
+                 {1, 0x3D14, 0},
+                 {1, 0x3D15, 0},
+                 {1, 0x3D16, 0},
+                 {1, 0x3D17, 0},
+                 {1, 0x3D18, 0},
+                 {1, 0x3D19, 0},
+                 {1, 0x3D1A, 0},
+                 {1, 0x3D1B, 0},
+                 {1, 0x3D1C, 0},
+                 {1, 0x3D1D, 0},
+                 {1, 0x3D1E, 0},
+                 {1, 0x3D1F, 0},
+                 {0xF000, 0, 0}
+};
+
 static struct misensor_reg const booyi_init[] = {
 	{1,12547,17},
 	{65024,0,5},
@@ -1986,9 +2024,9 @@ static struct misensor_reg const booyi_init[] = {
 
 static struct misensor_reg const ov5645_init[] = {
         {MISENSOR_8BIT, 0x3103, 0x11},
-        {MISENSOR_TOK_DELAY, {0}, 5},
+        {MISENSOR_TOK_DELAY, 0, 5},
         {MISENSOR_8BIT, 0x3008, 0x82},
-        {MISENSOR_TOK_DELAY, {0}, 5},
+        {MISENSOR_TOK_DELAY, 0, 5},
         {MISENSOR_8BIT, 0x3008, 0x42},
         {MISENSOR_8BIT, 0x302c, 0x82},
         {MISENSOR_8BIT, 0x3103, 0x03},

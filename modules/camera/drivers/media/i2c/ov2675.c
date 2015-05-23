@@ -1158,6 +1158,9 @@ static int ov2675_s_mbus_fmt(struct v4l2_subdev *sd,
 
 	switch (res_index->res) {
 	
+	case OV2675_RES_QCIF:
+		ret = ov2675_write_reg_array(c, ov2675_qcif_init);
+		break;
 	case OV2675_RES_VGA:
 		ret = ov2675_write_reg_array(c, ov2675_vga_init);
 		break;

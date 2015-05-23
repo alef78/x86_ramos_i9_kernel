@@ -29,15 +29,12 @@
 #define ATOMISP_CSS_VERSION_MASK	0x00ffffff
 #define ATOMISP_CSS_VERSION_15		KERNEL_VERSION(1, 5, 0)
 #define ATOMISP_CSS_VERSION_20		KERNEL_VERSION(2, 0, 0)
-#define ATOMISP_CSS_VERSION_21		KERNEL_VERSION(2, 1, 0)
 
 /* struct media_device_info.hw_revision */
 #define ATOMISP_HW_REVISION_MASK	0x0000ff00
 #define ATOMISP_HW_REVISION_SHIFT	8
 #define ATOMISP_HW_REVISION_ISP2300	0x00
 #define ATOMISP_HW_REVISION_ISP2400	0x10
-#define ATOMISP_HW_REVISION_ISP2401_LEGACY 0x11
-#define ATOMISP_HW_REVISION_ISP2401	0x20
 
 #define ATOMISP_HW_STEPPING_MASK	0x000000ff
 #define ATOMISP_HW_STEPPING_A0		0x00
@@ -156,23 +153,7 @@ struct atomisp_3a_config {
 	int af_fir2_coef[7];	/* [factor] AF FIR coefficients of fir2 */
 };
 
-struct atomisp_dvs_grid_info {
-	uint32_t enable;
-	uint32_t width;
-	uint32_t aligned_width;
-	uint32_t height;
-	uint32_t aligned_height;
-	uint32_t bqs_per_grid_cell;
-	uint32_t num_hor_coefs;
-	uint32_t num_ver_coefs;
-};
-
-struct atomisp_dvs_envelop {
-	unsigned int width;
-	unsigned int height;
-};
-
-#ifdef CSS20
+#ifdef CONFIG_VIDEO_ATOMISP_CSS20
 struct atomisp_grid_info {
 	uint32_t enable;
 	uint32_t use_dmem;
@@ -185,7 +166,7 @@ struct atomisp_grid_info {
 	uint32_t deci_factor_log2;
 	uint32_t elem_bit_depth;
 };
-#else /* CSS20 */
+#else /* CONFIG_VIDEO_ATOMISP_CSS20 */
 /* structure that describes the 3A and DIS grids shared with 3A lib*/
 struct atomisp_grid_info {
 	/* ISP input size that is visible for user */
@@ -204,61 +185,22 @@ struct atomisp_grid_info {
 	unsigned int dis_hor_coef_num;
 	unsigned int dis_ver_coef_num;
 };
-#endif /* CSS20 */
+#endif /* CONFIG_VIDEO_ATOMISP_CSS20 */
 struct atomisp_dis_vector {
 	int x;
 	int y;
 };
 
-
-/** DVS 2.0 Coefficient types. This structure contains 4 pointers to
- *  arrays that contain the coeffients for each type.
- */
-struct atomisp_dvs2_coef_types {
-	short __user *odd_real; /**< real part of the odd coefficients*/
-	short __user *odd_imag; /**< imaginary part of the odd coefficients*/
-	short __user *even_real;/**< real part of the even coefficients*/
-	short __user *even_imag;/**< imaginary part of the even coefficients*/
-};
-
-/*
- * DVS 2.0 Statistic types. This structure contains 4 pointers to
- * arrays that contain the statistics for each type.
- */
-struct atomisp_dvs2_stat_types {
-	int __user *odd_real; /**< real part of the odd statistics*/
-	int __user *odd_imag; /**< imaginary part of the odd statistics*/
-	int __user *even_real;/**< real part of the even statistics*/
-	int __user *even_imag;/**< imaginary part of the even statistics*/
-};
-
 struct atomisp_dis_coefficients {
-#ifdef CSS20
-	struct atomisp_dvs_grid_info grid_info;
-	struct atomisp_dvs2_coef_types hor_coefs;
-	struct atomisp_dvs2_coef_types ver_coefs;
-#else /* CSS20 */
 	struct atomisp_grid_info grid_info;
 	short __user *vertical_coefficients;
 	short __user *horizontal_coefficients;
-#endif /* CSS20 */
-};
-
-struct atomisp_dvs2_statistics {
-	struct atomisp_dvs_grid_info grid_info;
-	struct atomisp_dvs2_stat_types hor_prod;
-	struct atomisp_dvs2_stat_types ver_prod;
 };
 
 struct atomisp_dis_statistics {
-#ifdef CSS20
-	struct atomisp_dvs2_statistics dvs2_stat;
-	uint32_t exp_id;
-#else /* CSS20 */
 	struct atomisp_grid_info grid_info;
 	int __user *vertical_projections;
 	int __user *horizontal_projections;
-#endif
 };
 
 struct atomisp_3a_rgby_output {
@@ -268,18 +210,18 @@ struct atomisp_3a_rgby_output {
 	uint32_t y;
 };
 
-#ifdef CSS20
+#ifdef CONFIG_VIDEO_ATOMISP_CSS20
 struct atomisp_3a_statistics {
 	struct atomisp_grid_info  grid_info;
 	struct atomisp_3a_output __user *data;
 	struct atomisp_3a_rgby_output __user *rgby_data;
 };
-#else /* CSS20 */
+#else /* CONFIG_VIDEO_ATOMISP_CSS20 */
 struct atomisp_3a_statistics {
 	struct atomisp_grid_info  grid_info;
 	struct atomisp_3a_output __user *data;
 };
-#endif /* CSS20 */
+#endif /* CONFIG_VIDEO_ATOMISP_CSS20 */
 /**
  * struct atomisp_cont_capture_conf - continuous capture parameters
  * @num_captures: number of still images to capture
@@ -324,7 +266,7 @@ struct atomisp_de_config {
 };
 
 /* Chroma enhancement */
-#ifdef CSS20
+#ifdef CONFIG_VIDEO_ATOMISP_CSS20
 struct atomisp_ce_config {
 	unsigned char uv_level_min;
 	unsigned char uv_level_max;
@@ -348,29 +290,15 @@ struct atomisp_dp_config {
 	 * defects if the value is set too large. u8_8
 	 */
 	unsigned int gain;
-#ifdef CSS21
-	unsigned int gr;
-	unsigned int r;
-	unsigned int b;
-	unsigned int gb;
-#endif
 };
 
 /* XNR threshold */
 struct atomisp_xnr_config {
-#ifdef CSS21
-	__u16 threshold;
-#else
 	unsigned int threshold;
-#endif
 };
 
 struct atomisp_parm {
 	struct atomisp_grid_info info;
-#ifdef CSS20
-	struct atomisp_dvs_grid_info dvs_grid;
-	struct atomisp_dvs_envelop dvs_envelop;
-#endif
 	struct atomisp_wb_config wb_config;
 	struct atomisp_cc_config cc_config;
 	struct atomisp_ob_config ob_config;
@@ -382,19 +310,7 @@ struct atomisp_parm {
 	struct atomisp_tnr_config tnr_config;
 };
 
-struct atomisp_dvs_6axis_config {
-	uint32_t exp_id;
-	uint32_t width_y;
-	uint32_t height_y;
-	uint32_t width_uv;
-	uint32_t height_uv;
-	uint32_t *xcoords_y;
-	uint32_t *ycoords_y;
-	uint32_t *xcoords_uv;
-	uint32_t *ycoords_uv;
-};
-
-#ifdef CSS20
+#ifdef CONFIG_VIDEO_ATOMISP_CSS20
 struct atomisp_parameters {
 	struct atomisp_wb_config   *wb_config;  /* White Balance config */
 	struct atomisp_cc_config   *cc_config;  /* Color Correction config */
@@ -438,7 +354,7 @@ struct atomisp_parameters {
 	struct atomisp_capture_config   *capture_config;
 	struct atomisp_anr_thres   *anr_thres;
 };
-#else /* CSS20 */
+#else /* CONFIG_VIDEO_ATOMISP_CSS20 */
 struct atomisp_parameters {
 	struct atomisp_wb_config *wb_config;
 	struct atomisp_cc_config *cc_config;
@@ -458,7 +374,7 @@ struct atomisp_parameters {
 	struct atomisp_gc_config *gc_config;
 	struct atomisp_3a_config *a3a_config;
 };
-#endif /* CSS20 */
+#endif /* CONFIG_VIDEO_ATOMISP_CSS20 */
 #define ATOMISP_GAMMA_TABLE_SIZE        1024
 struct atomisp_gamma_table {
 	unsigned short data[ATOMISP_GAMMA_TABLE_SIZE];
@@ -470,9 +386,6 @@ struct atomisp_gamma_table {
  */
 #define ATOMISP_MORPH_TABLE_NUM_PLANES  6
 struct atomisp_morph_table {
-#ifdef CSS20
-	unsigned int enabled;
-#endif
 	unsigned int height;
 	unsigned int width;	/* number of valid elements per line */
 	unsigned short __user *coordinates_x[ATOMISP_MORPH_TABLE_NUM_PLANES];
@@ -482,7 +395,7 @@ struct atomisp_morph_table {
 #define ATOMISP_NUM_SC_COLORS	4
 #define ATOMISP_SC_FLAG_QUERY	(1 << 0)
 
-#ifdef CSS20
+#ifdef CONFIG_VIDEO_ATOMISP_CSS20
 struct atomisp_shading_table {
 	__u32 enable;
 
@@ -494,7 +407,7 @@ struct atomisp_shading_table {
 
 	__u16 *data[ATOMISP_NUM_SC_COLORS];
 };
-#else /* CSS20 */
+#else /* CONFIG_VIDEO_ATOMISP_CSS20 */
 struct atomisp_shading_table {
 	/*
 	 * If flag ATOMISP_SC_FLAG_QUERY is set, IOCTL will only query current
@@ -520,7 +433,7 @@ struct atomisp_shading_table {
 	/* one table for each color (use sh_css_sc_color to index) */
 	__u16 __user *data[ATOMISP_NUM_SC_COLORS];
 };
-#endif /* CSS20 */
+#endif /* CONFIG_VIDEO_ATOMISP_CSS20 */
 
 struct atomisp_makernote_info {
 	/* bits 31-16: numerator, bits 15-0: denominator */
@@ -637,7 +550,7 @@ enum atomisp_focus_hp {
 enum atomisp_camera_port {
 	ATOMISP_CAMERA_PORT_SECONDARY,
 	ATOMISP_CAMERA_PORT_PRIMARY,
-	ATOMISP_CAMERA_PORT_TERTIARY,
+	ATOMISP_CAMERA_PORT_THIRD,
 	ATOMISP_CAMERA_NR_PORTS
 };
 
@@ -694,7 +607,7 @@ enum atomisp_acc_arg_type {
 	ATOMISP_ACC_ARG_FRAME	     /* Frame argument */
 };
 
-#if defined(ISP2400) || defined(ISP2400B0)
+#if defined(CONFIG_ISP2400) || defined(CONFIG_ISP2400B0)
 /** ISP memories, isp2400 */
 enum atomisp_acc_memory {
 	ATOMISP_ACC_MEMORY_PMEM0 = 0,
@@ -706,7 +619,7 @@ enum atomisp_acc_memory {
 	ATOMISP_ACC_MEMORY_HMEM0,
 	ATOMISP_ACC_NR_MEMORY
 };
-#else /* defined(ISP2400) || defined(ISP2400B0) */
+#else /* defined(CONFIG_ISP2400) || defined(CONFIG_ISP2400B0) */
 /** ISP memories, isp2300 */
 enum atomisp_acc_memory {
 	ATOMISP_ACC_MEMORY_PMEM = 0,
@@ -716,7 +629,7 @@ enum atomisp_acc_memory {
 	ATOMISP_ACC_MEMORY_VAMEM2,
 	ATOMISP_ACC_NR_MEMORY		/* Must be last */
 };
-#endif /* defined(ISP2400) || defined(ISP2400B0) */
+#endif /* defined(CONFIG_ISP2400) || defined(CONFIG_ISP2400B0) */
 
 struct atomisp_sp_arg {
 	enum atomisp_acc_arg_type type;	/* Type  of SP argument */
@@ -842,14 +755,8 @@ struct v4l2_private_int_data {
 	_IOWR('v', BASE_VIDIOC_PRIVATE + 14, struct atomisp_dis_statistics)
 #define ATOMISP_IOC_S_DIS_COEFS \
 	_IOW('v', BASE_VIDIOC_PRIVATE + 15, struct atomisp_dis_coefficients)
-
-#ifdef CSS20
-#define ATOMISP_IOC_S_DIS_VECTOR \
-	_IOW('v', BASE_VIDIOC_PRIVATE + 16, struct atomisp_dvs_6axis_config)
-#else
 #define ATOMISP_IOC_S_DIS_VECTOR \
 	_IOW('v', BASE_VIDIOC_PRIVATE + 16, struct atomisp_dis_vector)
-#endif
 
 #define ATOMISP_IOC_G_3A_STAT \
 	_IOW('v', BASE_VIDIOC_PRIVATE + 17, struct atomisp_3a_statistics)
@@ -1044,6 +951,8 @@ struct v4l2_private_int_data {
 #define V4L2_CID_VCM_SLEW                  (V4L2_CID_CAMERA_LASTP1 + 11)
 /* VCM step time */
 #define V4L2_CID_VCM_TIMEING               (V4L2_CID_CAMERA_LASTP1 + 12)
+/* sensor test pattern */
+//#define V4L2_CID_TEST_PATTERN              (V4L2_CID_CAMERA_LASTP1 + 13)
 
 /* Query Focus Status */
 #define V4L2_CID_FOCUS_STATUS              (V4L2_CID_CAMERA_LASTP1 + 14)
@@ -1067,7 +976,6 @@ struct v4l2_private_int_data {
 #define ATOMISP_RUN_MODE_STILL_CAPTURE		2
 #define ATOMISP_RUN_MODE_CONTINUOUS_CAPTURE	3
 #define ATOMISP_RUN_MODE_PREVIEW		4
-#define ATOMISP_RUN_MODE_SDV			5
 
 #define V4L2_CID_ENABLE_VFPP			(V4L2_CID_CAMERA_LASTP1 + 21)
 #define V4L2_CID_ATOMISP_CONTINUOUS_MODE	(V4L2_CID_CAMERA_LASTP1 + 22)

@@ -72,17 +72,13 @@ int hmm_bo_device_init(struct hmm_bo_device *bdev,
 #ifdef CONFIG_ION
 	/*
 	 * TODO:
-	 * ion driver global variable and heap mask
-	 * should be changed when mrfld ion is ready
+	 * The ion_dev should be defined by ION driver. But ION driver does
+	 * not implement it yet, will fix it when it is ready.
 	 */
-	if (!mrfld_ion_driver)
+	if (!ion_dev)
 		goto vm_init_err;
 
-	bdev->iclient = ion_client_create(mrfld_ion_driver,
-					  ION_HEAP_TYPE_SYSTEM_CONTIG |
-					  ION_HEAP_TYPE_SYSTEM |
-					  ION_HEAP_TYPE_CARVEOUT,
-					  "atomisp");
+	bdev->iclient = ion_client_create(ion_dev, "atomisp");
 	if (IS_ERR_OR_NULL(bdev->iclient)) {
 		ret = PTR_ERR(bdev->iclient);
 		if (!bdev->iclient)

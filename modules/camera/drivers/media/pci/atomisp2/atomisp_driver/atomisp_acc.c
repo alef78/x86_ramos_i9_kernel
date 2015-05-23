@@ -429,7 +429,7 @@ int atomisp_acc_load_extensions(struct atomisp_sub_device *asd)
 {
 	struct atomisp_acc_fw *acc_fw;
 	bool ext_loaded = false;
-	int ret = 0, i;
+	int ret = 0, i = -1;
 	struct atomisp_device *isp = asd->isp;
 
 	if (isp->acc.pipeline || isp->acc.extension_mode)

@@ -755,6 +755,8 @@ int atomisp_css_stop(struct atomisp_sub_device *asd,
 {
 	enum sh_css_err ret;
 
+	/* No need to dump debug traces when css is stopped. */
+	sh_css_set_dtrace_level(0);
 	switch (pipe_id) {
 	case SH_CSS_PREVIEW_PIPELINE:
 		ret = sh_css_preview_stop();
@@ -768,6 +770,8 @@ int atomisp_css_stop(struct atomisp_sub_device *asd,
 		ret = sh_css_capture_stop();
 		break;
 	}
+	sh_css_set_dtrace_level(CSS_DTRACE_VERBOSITY_LEVEL);
+
 	if (ret != sh_css_success) {
 		dev_err(asd->isp->dev, "stop css fatal error.\n");
 		return -EINVAL;
@@ -1431,6 +1435,11 @@ int atomisp_css_load_acc_binary(struct atomisp_sub_device *asd,
 		return -EBADSLT;
 
 	return 0;
+}
+
+void atomisp_set_stop_timeout(unsigned int timeout)
+{
+	sh_css_set_stop_timeout(timeout);
 }
 
 int atomisp_css_isr_thread(struct atomisp_device *isp,

@@ -461,10 +461,11 @@ static int atomisp_open(struct file *file)
 		goto error;
 	}
 
-	ret = hmm_pool_register((unsigned int)dypool_enable,
-						HMM_POOL_TYPE_DYNAMIC);
-	if (ret)
-		dev_err(isp->dev, "Failed to register dynamic memory pool.\n");
+	if (dypool_enable) {
+		ret = hmm_pool_register(dypool_pgnr, HMM_POOL_TYPE_DYNAMIC);
+		if (ret)
+			dev_err(isp->dev, "Failed to register dynamic memory pool.\n");
+	}
 
 	/* Init ISP */
 	if (atomisp_css_init(isp)) {
@@ -693,7 +694,11 @@ int atomisp_videobuf_mmap_mapper(struct videobuf_queue *q,
 		    buf->boff == offset) {
 			vm_mem = buf->priv;
 			ret = frame_mmap(isp, vm_mem->vaddr, vma);
-			vma->vm_flags |= VM_DONTEXPAND | VM_IO | VM_DONTDUMP;
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0))
+			vma->vm_flags |= VM_IO|VM_DONTEXPAND|VM_DONTDUMP;
+#else
+			vma->vm_flags |= VM_DONTEXPAND | VM_RESERVED;
+#endif
 			break;
 		}
 	}
@@ -801,7 +806,11 @@ static int atomisp_mmap(struct file *file, struct vm_area_struct *vma)
 			goto error;
 		}
 		raw_virt_addr->data_bytes = origin_size;
-		vma->vm_flags |= VM_IO | VM_DONTEXPAND | VM_DONTDUMP;
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0))
+		vma->vm_flags |= VM_IO|VM_DONTEXPAND|VM_DONTDUMP;
+#else
+		vma->vm_flags |= VM_RESERVED;
+#endif
 		mutex_unlock(&isp->mutex);
 		return 0;
 	}

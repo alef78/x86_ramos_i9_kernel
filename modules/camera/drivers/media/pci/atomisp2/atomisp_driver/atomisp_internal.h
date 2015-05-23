@@ -29,6 +29,8 @@
 #include <linux/pm_qos.h>
 #include <linux/idr.h>
 
+#include <asm/intel-mid.h>
+
 #include <media/media-device.h>
 #include <media/v4l2-subdev.h>
 
@@ -47,6 +49,11 @@
 
 #include "gp_device.h"
 #include "irq.h"
+
+#define IS_BYT (INTEL_MID_BOARD(1, PHONE, BYT) || \
+	INTEL_MID_BOARD(1, TABLET, BYT))
+#define IS_MFLD (INTEL_MID_BOARD(1, PHONE, MFLD) || \
+        INTEL_MID_BOARD(1, TABLET, MFLD))
 
 #define MAX_STREAM_NUM	2
 
@@ -97,6 +104,7 @@
 #define ATOMISP_ISP_TIMEOUT_DURATION		(2 * HZ)
 #define ATOMISP_ISP_FILE_TIMEOUT_DURATION	(60 * HZ)
 #define ATOMISP_ISP_MAX_TIMEOUT_COUNT	2
+#define ATOMISP_CSS_STOP_TIMEOUT_US	200000
 
 #define ATOMISP_CSS_Q_DEPTH	3
 #define ATOMISP_CSS_EVENTS_MAX  16
@@ -285,6 +293,7 @@ struct atomisp_device {
 	struct timer_list wdt;
 	atomic_t wdt_count;
 	unsigned int wdt_duration;	/* in jiffies */
+	atomic_t fast_reset;
 
 	spinlock_t lock; /* Just for streaming below */
 

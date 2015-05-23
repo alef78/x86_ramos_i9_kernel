@@ -834,6 +834,8 @@ struct sh_css_irq_info {
 
 /* ===== GENERIC ===== */
 
+void sh_css_set_stop_timeout(unsigned int timeout);
+
 /** @brief Return the default environment.
  *
  * @return		the default environment.
@@ -842,8 +844,7 @@ struct sh_css_irq_info {
  * isp_buffer_env and css_hw_env are fully defined,
  * sh_env and print_env are undefined.
 */
-struct sh_css_env
-sh_css_default_env(void);
+struct sh_css_env sh_css_default_env(void);
 
 /** @brief Initialize the CSS API.
  * @param[in]	env		Environment, provides functions to access the

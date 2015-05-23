@@ -278,6 +278,45 @@ static struct v4l2_queryctrl ci_v4l2_controls[] = {
 		.step = 1,
 		.default_value = 0,
 	},
+	{
+		.id = V4L2_CID_AUTO_FOCUS_RANGE,
+		.type = V4L2_CTRL_TYPE_BITMASK,
+		.name = "auto focus range",
+		.minimum = 0,
+		.maximum =1,
+		.step = 1,
+		.default_value = 0,
+	},
+
+	{
+		.id = V4L2_CID_FOCUS_AUTO,
+		.type = V4L2_CTRL_TYPE_BITMASK,
+		.name = "continuous focus",
+		.minimum = 0,
+		.maximum =1,
+		.step = 1,
+		.default_value = 0,
+	},
+	
+	{
+		.id = V4L2_CID_AUTO_FOCUS_START,
+		.type = V4L2_CTRL_TYPE_BITMASK,
+		.name = "single focus",
+		.minimum = 0,
+		.maximum =1,
+		.step = 1,
+		.default_value = 0,
+	},
+	
+	{
+		.id = V4L2_CID_AUTO_FOCUS_STATUS,
+		.type = V4L2_CTRL_TYPE_BITMASK,
+		.name = "focus status",
+		.minimum = 0,
+		.maximum =1,
+		.step = 1,
+		.default_value = 0,
+	},
 };
 static const u32 ctrls_num = ARRAY_SIZE(ci_v4l2_controls);
 
@@ -1423,7 +1462,13 @@ static int atomisp_streamon(struct file *file, void *fh,
 		dev_err(isp->dev, "acc extension failed to load\n");
 		goto out;
 	}
-	ret = atomisp_css_start(asd, css_pipe_id, false);
+	/*workaround solution for isp timeout*/
+	if((!strncmp(isp->inputs[asd->input_curr].camera->name,"ov5645",6))||(!strncmp(isp->inputs[asd->input_curr].camera->name,"ov7692",6))){
+		/* reset ISP and restore its state */
+	     printk("===isp reset due to %s \n",isp->inputs[asd->input_curr].camera->name);	
+             atomisp_reset(isp);
+	}
+        ret = atomisp_css_start(asd, css_pipe_id, false);
 	if (ret)
 		goto out;
 
@@ -1449,6 +1494,7 @@ static int atomisp_streamon(struct file *file, void *fh,
 	atomic_set(&asd->sequence, -1);
 	atomic_set(&asd->sequence_temp, -1);
 	atomic_set(&isp->wdt_count, 0);
+	atomic_set(&isp->fast_reset, 0);
 	if (isp->sw_contex.file_input)
 		isp->wdt_duration = ATOMISP_ISP_FILE_TIMEOUT_DURATION;
 	else
@@ -1474,7 +1520,10 @@ start_sensor:
 	if (!isp->sw_contex.file_input) {
 		atomisp_css_irq_enable(isp, CSS_IRQ_INFO_CSS_RECEIVER_SOF,
 					true);
-
+#if !defined(CONFIG_VIDEO_ATOMISP_CSS15) || !defined(CONFIG_ISP2400)
+		atomisp_css_irq_enable(isp,
+				CSS_IRQ_INFO_CSS_RECEIVER_FIFO_OVERFLOW, true);
+#endif
 		atomisp_set_term_en_count(isp);
 
 		if (IS_ISP2400(isp) &&
@@ -1738,6 +1787,8 @@ static int atomisp_g_ctrl(struct file *file, void *fh,
 	case V4L2_CID_SATURATION:
 	case V4L2_CID_SHARPNESS:
 	case V4L2_CID_3A_LOCK:
+	case V4L2_CID_AUTO_FOCUS_RANGE:	
+	case V4L2_CID_AUTO_FOCUS_STATUS:
 		mutex_unlock(&isp->mutex);
 		return v4l2_subdev_call(isp->inputs[asd->input_curr].camera,
 				       core, g_ctrl, control);
@@ -1808,6 +1859,8 @@ static int atomisp_s_ctrl(struct file *file, void *fh,
 	case V4L2_CID_SATURATION:
 	case V4L2_CID_SHARPNESS:
 	case V4L2_CID_3A_LOCK:
+	case V4L2_CID_AUTO_FOCUS_RANGE:	
+	case V4L2_CID_AUTO_FOCUS_START:
 		mutex_unlock(&isp->mutex);
 		return v4l2_subdev_call(isp->inputs[asd->input_curr].camera,
 				       core, s_ctrl, control);
@@ -2174,9 +2227,12 @@ static int atomisp_s_parm_file(struct file *file, void *fh,
 	return 0;
 }
 
-/* set default atomisp ioctl value */
 static long atomisp_vidioc_default(struct file *file, void *fh,
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0))
 	bool valid_prio, unsigned int cmd, void *arg)
+#else
+	bool valid_prio, int cmd, void *arg)
+#endif
 {
 	struct video_device *vdev = video_devdata(file);
 	struct atomisp_device *isp = video_get_drvdata(vdev);
@@ -2418,7 +2474,6 @@ const struct v4l2_ioctl_ops atomisp_ioctl_ops = {
 	.vidioc_try_fmt_vid_cap = atomisp_try_fmt_cap,
 	.vidioc_g_fmt_vid_cap = atomisp_g_fmt_cap,
 	.vidioc_s_fmt_vid_cap = atomisp_s_fmt_cap,
-	//.vidioc_s_fmt_type_private = atomisp_s_fmt_cap,
 	.vidioc_reqbufs = atomisp_reqbufs,
 	.vidioc_querybuf = atomisp_querybuf,
 	.vidioc_qbuf = atomisp_qbuf,

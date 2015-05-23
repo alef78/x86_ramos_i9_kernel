@@ -66,7 +66,8 @@
 
 #define CSS_IRQ_INFO_CSS_RECEIVER_SOF	CSS_ID(CSS_IRQ_INFO_CSS_RECEIVER_SOF)
 #define CSS_IRQ_INFO_CSS_RECEIVER_EOF	CSS_ID(CSS_IRQ_INFO_CSS_RECEIVER_EOF)
-
+#define CSS_IRQ_INFO_CSS_RECEIVER_FIFO_OVERFLOW \
+	CSS_ID(CSS_IRQ_INFO_CSS_RECEIVER_FIFO_OVERFLOW)
 #define CSS_EVENT_OUTPUT_FRAME_DONE	CSS_EVENT(OUTPUT_FRAME_DONE)
 #define CSS_EVENT_VF_OUTPUT_FRAME_DONE	CSS_EVENT(VF_OUTPUT_FRAME_DONE)
 #define CSS_EVENT_3A_STATISTICS_DONE	CSS_EVENT(3A_STATISTICS_DONE)
@@ -509,4 +510,5 @@ int atomisp_css_isr_thread(struct atomisp_device *isp,
 			   bool *frame_done_found,
 			   bool *css_pipe_done,
 			   bool *reset_wdt_timer);
+void atomisp_set_stop_timeout(unsigned int timeout);
 #endif

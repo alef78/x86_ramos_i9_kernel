@@ -106,6 +106,9 @@ struct hmm_dynamic_pool_info {
 	struct kmem_cache	*pgptr_cache;
 #endif
 	bool			initialized;
+
+	unsigned int		pool_size;
+	unsigned int		pgnr;
 };
 
 struct hmm_page {

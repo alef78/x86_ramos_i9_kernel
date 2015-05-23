@@ -334,7 +334,7 @@ int atomisp_freq_scaling(struct atomisp_device *isp, enum atomisp_dfs_mode mode)
 
 done:
 	/* workround to get isp works at 400Mhz for byt due to perf issue */
-	if (intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_VALLEYVIEW2)
+	if (IS_BYT)
 		new_freq = ISP_FREQ_400MHZ;
 
 	dev_dbg(isp->dev, "DFS target frequency=%d.\n", new_freq);
@@ -576,9 +576,14 @@ irqreturn_t atomisp_isr(int irq, void *dev)
 		print_csi_rx_errors(isp);
 		atomisp_css_rx_get_irq_info(&rx_infos);
 		atomisp_css_rx_clear_irq_info(rx_infos);
-		/* TODO: handle CSS_RX_IRQ_INFO_BUFFER_OVERRUN */
 	}
-
+#if defined(CONFIG_VIDEO_ATOMISP_CSS15) && defined(CONFIG_ISP2300)
+	if (irq_infos & CSS_IRQ_INFO_CSS_RECEIVER_FIFO_OVERFLOW) {
+		atomic_inc(&isp->fast_reset);
+		queue_work(isp->wdt_work_queue, &isp->wdt_work);
+		goto out_nowake;
+	}
+#endif
 #ifndef CONFIG_VIDEO_ATOMISP_CSS20
 	if (irq_infos & CSS_IRQ_INFO_INVALID_FIRST_FRAME) {
 		isp->sw_contex.invalid_frame = 1;
@@ -637,21 +642,27 @@ void atomisp_set_term_en_count(struct atomisp_device *isp)
 	if (IS_ISP2400(isp))
 		return;
 
-	if (isp->pdev->device == 0x0148 && isp->pdev->revision < 0x6 &&
-		__intel_mid_cpu_chip == INTEL_MID_CPU_CHIP_PENWELL)
+	if (IS_MFLD && isp->pdev->device == 0x0148 &&
+		isp->pdev->revision < 0x6)
 		pwn_b0 = 1;
 
 	val = intel_mid_msgbus_read32(MFLD_IUNITPHY_PORT, MFLD_CSI_CONTROL);
 
 	/* set TERM_EN_COUNT_1LANE to 0xf */
 	val &= ~TERM_EN_COUNT_1LANE_MASK;
-	val |= 0xf << TERM_EN_COUNT_1LANE_OFFSET;
-
+       //	val |= 0xf << TERM_EN_COUNT_1LANE_OFFSET;
+        val |= 0x21 << TERM_EN_COUNT_1LANE_OFFSET;
 	/* set TERM_EN_COUNT_4LANE to 0xf */
 	val &= pwn_b0 ? ~TERM_EN_COUNT_4LANE_PWN_B0_MASK :
 				~TERM_EN_COUNT_4LANE_MASK;
-	val |= 0xf << (pwn_b0 ? TERM_EN_COUNT_4LANE_PWN_B0_OFFSET :
+        #ifdef CONFIG_VIDEO_S5K5CAGX
+	val |= 0x1c << (pwn_b0 ? TERM_EN_COUNT_4LANE_PWN_B0_OFFSET :
 				TERM_EN_COUNT_4LANE_OFFSET);
+        #else
+	//lwl modify from 0xf to 0x3a
+	val |= 0x3a << (pwn_b0 ? TERM_EN_COUNT_4LANE_PWN_B0_OFFSET :
+				TERM_EN_COUNT_4LANE_OFFSET);
+        #endif
 
 	intel_mid_msgbus_write32(MFLD_IUNITPHY_PORT, MFLD_CSI_CONTROL, val);
 }
@@ -1066,35 +1077,23 @@ void atomisp_wdt_work(struct work_struct *work)
 	bool stream_restart[MAX_STREAM_NUM] = {0};
 	int i, ret;
 
-	dev_err(isp->dev, "timeout %d of %d\n",
-		atomic_read(&isp->wdt_count) + 1,
-		ATOMISP_ISP_MAX_TIMEOUT_COUNT);
-
 	mutex_lock(&isp->mutex);
 	if (!atomisp_streaming_count(isp)) {
 		mutex_unlock(&isp->mutex);
 		return;
 	}
 
-	switch (atomic_inc_return(&isp->wdt_count)) {
-	case ATOMISP_ISP_MAX_TIMEOUT_COUNT:
-		for (i = 0; i < isp->num_of_streams; i++) {
-			asd = &isp->asd[i];
-			if (asd->streaming ==
-			    ATOMISP_DEVICE_STREAMING_ENABLED) {
-				atomisp_clear_css_buffer_counters(asd);
-				atomisp_flush_bufs_and_wakeup(asd);
-			}
-		}
+	if (atomic_read(&isp->fast_reset)) {
+		atomisp_set_stop_timeout(0);
+		goto process_timeout;
+	}
 
-		atomic_set(&isp->wdt_count, 0);
+	dev_err(isp->dev, "timeout %d of %d\n",
+		atomic_read(&isp->wdt_count) + 1,
+		ATOMISP_ISP_MAX_TIMEOUT_COUNT);
 
-		isp->isp_fatal_error = true;
-
-		complete(&isp->init_done);
-
-		break;
-	default:
+	if (atomic_inc_return(&isp->wdt_count) <
+			ATOMISP_ISP_MAX_TIMEOUT_COUNT) {
 		sh_css_set_dtrace_level(CSS_DTRACE_VERBOSITY_TIMEOUT);
 		sh_css_dump_sp_sw_debug_info();
 		sh_css_dump_debug_info(__func__);
@@ -1140,126 +1139,153 @@ void atomisp_wdt_work(struct work_struct *work)
 
 		/*sh_css_dump_sp_state();*/
 		/*sh_css_dump_isp_state();*/
-
-		if (!isp->sw_contex.file_input)
-			atomisp_css_irq_enable(isp,
-					CSS_IRQ_INFO_CSS_RECEIVER_SOF, false);
-
-		if (isp->delayed_init == ATOMISP_DELAYED_INIT_QUEUED)
-			cancel_work_sync(&isp->delayed_init_work);
-
-		complete(&isp->init_done);
-		isp->delayed_init = ATOMISP_DELAYED_INIT_NOT_QUEUED;
-
+	} else {
 		for (i = 0; i < isp->num_of_streams; i++) {
 			asd = &isp->asd[i];
-			if (asd->streaming !=
-			    ATOMISP_DEVICE_STREAMING_ENABLED)
-				continue;
-
-			stream_restart[asd->index] = true;
-
-			asd->streaming = ATOMISP_DEVICE_STREAMING_STOPPING;
-
-			css_pipe_id = atomisp_get_css_pipe_id(asd);
-			atomisp_css_stop(asd, css_pipe_id, true);
-
-			atomisp_acc_unload_extensions(asd);
-
-			/* stream off sensor */
-			ret = v4l2_subdev_call(
-					       isp->inputs[asd->input_curr].
-					       camera, video, s_stream, 0);
-			if (ret)
-				dev_warn(isp->dev,
-					 "can't stop streaming on sensor!\n");
-
-			atomisp_clear_css_buffer_counters(asd);
-			asd->streaming = ATOMISP_DEVICE_STREAMING_DISABLED;
+			if (asd->streaming ==
+			    ATOMISP_DEVICE_STREAMING_ENABLED) {
+				atomisp_clear_css_buffer_counters(asd);
+				atomisp_flush_bufs_and_wakeup(asd);
+			}
 		}
 
+		atomic_set(&isp->wdt_count, 0);
+		isp->isp_fatal_error = true;
+		complete(&isp->init_done);
+
+		mutex_unlock(&isp->mutex);
+		return;
+	}
+process_timeout:
+	if (!isp->sw_contex.file_input) {
+		atomisp_css_irq_enable(isp,
+				CSS_IRQ_INFO_CSS_RECEIVER_SOF, false);
+#if defined(CONFIG_VIDEO_ATOMISPCSS15) && defined(CONFIG_ISP2300)
+		atomisp_css_irq_enable(isp,
+				CSS_IRQ_INFO_CSS_RECEIVER_FIFO_OVERFLOW, false);
+#endif
+	}
+
+	if (isp->delayed_init == ATOMISP_DELAYED_INIT_QUEUED)
+		cancel_work_sync(&isp->delayed_init_work);
+
+	complete(&isp->init_done);
+	isp->delayed_init = ATOMISP_DELAYED_INIT_NOT_QUEUED;
+
+	for (i = 0; i < isp->num_of_streams; i++) {
+		asd = &isp->asd[i];
+		if (asd->streaming !=
+				ATOMISP_DEVICE_STREAMING_ENABLED)
+			continue;
+
+		stream_restart[asd->index] = true;
+
+		asd->streaming = ATOMISP_DEVICE_STREAMING_STOPPING;
+
+		css_pipe_id = atomisp_get_css_pipe_id(asd);
+		atomisp_css_stop(asd, css_pipe_id, true);
+
+		atomisp_acc_unload_extensions(asd);
+
+		/* stream off sensor */
+		ret = v4l2_subdev_call(
+				isp->inputs[asd->input_curr].
+				camera, video, s_stream, 0);
+		if (ret)
+			dev_warn(isp->dev,
+					"can't stop streaming on sensor!\n");
+
+		atomisp_clear_css_buffer_counters(asd);
+		asd->streaming = ATOMISP_DEVICE_STREAMING_DISABLED;
+	}
 
 
-		/* clear irq */
-		enable_isp_irq(hrt_isp_css_irq_sp, false);
-		clear_isp_irq(hrt_isp_css_irq_sp);
 
-		/* reset ISP and restore its state */
-		isp->isp_timeout = true;
-		atomisp_reset(isp);
-		isp->isp_timeout = false;
+	/* clear irq */
+	enable_isp_irq(hrt_isp_css_irq_sp, false);
+	clear_isp_irq(hrt_isp_css_irq_sp);
 
-		/* The following frame after an ISP timeout
-		 * may be corrupted, so mark it so. */
-		isp->sw_contex.invalid_frame = 1;
-		isp->sw_contex.invalid_vf_frame = 1;
-		isp->sw_contex.invalid_s3a = 1;
-		isp->sw_contex.invalid_dis = 1;
+	/* reset ISP and restore its state */
+	isp->isp_timeout = true;
+	atomisp_reset(isp);
+	isp->isp_timeout = false;
 
-		for (i = 0; i < isp->num_of_streams; i++) {
-			if (!stream_restart[i])
-				continue;
+	/* The following frame after an ISP timeout
+	 * may be corrupted, so mark it so. */
+	isp->sw_contex.invalid_frame = 1;
+	isp->sw_contex.invalid_vf_frame = 1;
+	isp->sw_contex.invalid_s3a = 1;
+	isp->sw_contex.invalid_dis = 1;
 
-			asd = &isp->asd[i];
-			if (atomisp_acc_load_extensions(asd) < 0)
-				dev_err(isp->dev,
+	for (i = 0; i < isp->num_of_streams; i++) {
+		if (!stream_restart[i])
+			continue;
+
+		asd = &isp->asd[i];
+		if (atomisp_acc_load_extensions(asd) < 0)
+			dev_err(isp->dev,
 					"acc extension failed to reload\n");
 
-			if (isp->inputs[asd->input_curr].type != TEST_PATTERN &&
-			    isp->inputs[asd->input_curr].type != FILE_INPUT)
-				atomisp_css_input_set_mode(asd,
-						CSS_INPUT_MODE_SENSOR);
+		if (isp->inputs[asd->input_curr].type != TEST_PATTERN &&
+				isp->inputs[asd->input_curr].type != FILE_INPUT)
+			atomisp_css_input_set_mode(asd,
+					CSS_INPUT_MODE_SENSOR);
 
-			css_pipe_id = atomisp_get_css_pipe_id(asd);
-			atomisp_css_start(asd, css_pipe_id, true);
+		css_pipe_id = atomisp_get_css_pipe_id(asd);
+		atomisp_css_start(asd, css_pipe_id, true);
 
-			asd->streaming = ATOMISP_DEVICE_STREAMING_ENABLED;
-		}
+		asd->streaming = ATOMISP_DEVICE_STREAMING_ENABLED;
+	}
 
-		if (!isp->sw_contex.file_input) {
-			atomisp_css_irq_enable(isp,
-					CSS_IRQ_INFO_CSS_RECEIVER_SOF, true);
+	if (!isp->sw_contex.file_input) {
+		atomisp_css_irq_enable(isp,
+				CSS_IRQ_INFO_CSS_RECEIVER_SOF, true);
+#if defined(CONFIG_VIDEO_ATOMISPCSS15) && defined(CONFIG_ISP2300)
+		atomisp_css_irq_enable(isp,
+				CSS_IRQ_INFO_CSS_RECEIVER_FIFO_OVERFLOW, true);
+#endif
 
-			atomisp_set_term_en_count(isp);
+		atomisp_set_term_en_count(isp);
 
-			if (IS_ISP2400(isp) &&
-			atomisp_freq_scaling(isp, ATOMISP_DFS_MODE_AUTO) < 0)
-				dev_dbg(isp->dev, "dfs failed!\n");
-		} else {
-			if (IS_ISP2400(isp) &&
-			atomisp_freq_scaling(isp, ATOMISP_DFS_MODE_MAX) < 0)
-				dev_dbg(isp->dev, "dfs failed!\n");
-		}
+		if (IS_ISP2400(isp) &&
+		    atomisp_freq_scaling(isp, ATOMISP_DFS_MODE_AUTO) < 0)
+			dev_dbg(isp->dev, "dfs failed!\n");
+	} else {
+		if (IS_ISP2400(isp) &&
+		    atomisp_freq_scaling(isp, ATOMISP_DFS_MODE_MAX) < 0)
+			dev_dbg(isp->dev, "dfs failed!\n");
+	}
 
-		for (i = 0; i < isp->num_of_streams; i++) {
-			if (!stream_restart[i])
-				continue;
+	for (i = 0; i < isp->num_of_streams; i++) {
+		if (!stream_restart[i])
+			continue;
 
-			asd = &isp->asd[i];
-			ret = v4l2_subdev_call(
+		asd = &isp->asd[i];
+		ret = v4l2_subdev_call(
 				isp->inputs[asd->input_curr].camera, video,
 				s_stream, 1);
-			if (ret)
-				dev_warn(isp->dev,
-					 "can't start streaming on sensor!\n");
+		if (ret)
+			dev_warn(isp->dev,
+					"can't start streaming on sensor!\n");
 
-			if (asd->continuous_mode->val &&
-			    asd->run_mode->val != ATOMISP_RUN_MODE_VIDEO &&
-			    isp->delayed_init ==
-			    ATOMISP_DELAYED_INIT_NOT_QUEUED) {
-				INIT_COMPLETION(isp->init_done);
-				isp->delayed_init = ATOMISP_DELAYED_INIT_QUEUED;
-				queue_work(isp->delayed_init_workq,
-					   &isp->delayed_init_work);
-			}
-			/*
-			 * dequeueing buffers is not needed. CSS will recycle
-			 * buffers that it has.
-			 */
-			atomisp_flush_bufs_and_wakeup(asd);
+		if (asd->continuous_mode->val &&
+				asd->run_mode->val != ATOMISP_RUN_MODE_VIDEO &&
+				isp->delayed_init ==
+				ATOMISP_DELAYED_INIT_NOT_QUEUED) {
+			INIT_COMPLETION(isp->init_done);
+			isp->delayed_init = ATOMISP_DELAYED_INIT_QUEUED;
+			queue_work(isp->delayed_init_workq,
+					&isp->delayed_init_work);
 		}
-		dev_err(isp->dev, "timeout recovery handling done\n");
+		/*
+		 * dequeueing buffers is not needed. CSS will recycle
+		 * buffers that it has.
+		 */
+		atomisp_flush_bufs_and_wakeup(asd);
 	}
+	atomic_set(&isp->fast_reset, 0);
+	atomisp_set_stop_timeout(ATOMISP_CSS_STOP_TIMEOUT_US);
+	dev_err(isp->dev, "timeout recovery handling done\n");
 
 	mutex_unlock(&isp->mutex);
 }
@@ -3183,9 +3209,9 @@ static mipi_port_ID_t __get_mipi_port(struct atomisp_device *isp,
 		return MIPI_PORT0_ID;
 	case ATOMISP_CAMERA_PORT_SECONDARY:
 		return MIPI_PORT1_ID;
-//	case ATOMISP_CAMERA_PORT_THIRD:
-//		if (MIPI_PORT1_ID + 1 != N_MIPI_PORT_ID)
-//			return MIPI_PORT1_ID + 1;
+	case ATOMISP_CAMERA_PORT_THIRD:
+		if (MIPI_PORT1_ID + 1 != N_MIPI_PORT_ID)
+			return MIPI_PORT1_ID + 1;
 		/* go through down for else case */
 	default:
 		dev_err(isp->dev, "unsupported port: %d\n", port);
@@ -3711,7 +3737,7 @@ int atomisp_set_fmt(struct video_device *vdev, struct v4l2_format *f)
 	if (!atomisp_subdev_format_conversion(asd, source_pad))
 		padding_w = 0, padding_h = 0;
 
-	if (intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_VALLEYVIEW2) {
+	if (IS_BYT) {
 		padding_w = 12;
 		padding_h = 12;
 	}

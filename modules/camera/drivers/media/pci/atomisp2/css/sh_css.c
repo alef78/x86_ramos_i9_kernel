@@ -403,6 +403,8 @@ struct sh_css {
 
 int (*sh_css_printf) (const char *fmt, ...) = NULL;
 
+unsigned int sh_css_stop_timeout_us;
+
 static struct sh_css my_css;
 /* static variables, temporarily used in load_<mode>_binaries.
    Declaring these inside the functions increases the size of the
@@ -485,6 +487,12 @@ sh_css_pipeline_stop(enum sh_css_pipe_id pipe);
 
 static uint32_t
 translate_sp_event(uint32_t sp_event);
+
+void
+sh_css_set_stop_timeout(unsigned int timeout)
+{
+	sh_css_stop_timeout_us = timeout;
+}
 
 static void
 sh_css_pipe_free_shading_table(struct sh_css_pipe *pipe)
@@ -2196,6 +2204,7 @@ enum sh_css_err sh_css_init(
 	sh_css_printf = env->print_env.debug_print;
 
 	sh_css_set_dtrace_level(SH_DBG_INFO);
+	sh_css_set_stop_timeout(CSS_TIMEOUT_US);
 	sh_css_dtrace(SH_DBG_TRACE,
 		"sh_css_init() enter: env=%p, fw_data=%p, fw_size=%d\n",
 		env, fw_data, fw_size);
@@ -4284,7 +4293,7 @@ static enum sh_css_err sh_css_pipeline_stop(
 	enum sh_css_pipe_id pipe)
 {
 	unsigned int i;
-	unsigned long timeout;
+	unsigned long timeout = sh_css_stop_timeout_us;
 
 	sh_css_dtrace(SH_DBG_TRACE, "sh_css_pipeline_stop()\n");
 	(void)pipe;
@@ -4295,7 +4304,6 @@ static enum sh_css_err sh_css_pipeline_stop(
 #ifdef __KERNEL__
 	printk("STOP_FUNC: reach point 1\n");
 #endif
-	timeout = CSS_TIMEOUT_US;
 	while (!sh_css_sp_has_terminated() && timeout) {
 		timeout--;
 		hrt_sleep();

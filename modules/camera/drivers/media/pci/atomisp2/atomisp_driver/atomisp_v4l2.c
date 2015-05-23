@@ -52,6 +52,12 @@ module_param(repool_pgnr, uint, 0644);
 MODULE_PARM_DESC(repool_pgnr,
 		"Set the reserved memory pool size in page (default:0)");
 
+/* set dynamic memory pool size in page */
+unsigned int dypool_pgnr = UINT_MAX;
+module_param(dypool_pgnr, uint, 0644);
+MODULE_PARM_DESC(dypool_pgnr,
+		"Set the dynamic memory pool size in page (default:0)");
+
 bool dypool_enable;
 module_param(dypool_enable, bool, 0644);
 MODULE_PARM_DESC(dypool_enable,
@@ -433,7 +439,7 @@ static int atomisp_runtime_suspend(struct device *dev)
 	if (ret)
 		return ret;
 	pm_qos_update_request(&isp->pm_qos, PM_QOS_DEFAULT_VALUE);
-	if (intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_VALLEYVIEW2)
+	if (IS_BYT)
 		ret = atomisp_mrfld_power_down(isp);
 
 	return ret;
@@ -445,7 +451,7 @@ static int atomisp_runtime_resume(struct device *dev)
 		dev_get_drvdata(dev);
 	int ret;
 
-	if (intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_VALLEYVIEW2) {
+	if (IS_BYT) {
 		ret = atomisp_mrfld_power_up(isp);
 		if (ret)
 			return ret;
@@ -509,7 +515,7 @@ static int atomisp_suspend(struct device *dev)
 		return ret;
 	}
 	pm_qos_update_request(&isp->pm_qos, PM_QOS_DEFAULT_VALUE);
-	if (intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_VALLEYVIEW2)
+	if (IS_BYT)
 		ret = atomisp_mrfld_power_down(isp);
 
 	return ret;
@@ -521,7 +527,7 @@ static int atomisp_resume(struct device *dev)
 		dev_get_drvdata(dev);
 	int ret;
 
-	if (intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_VALLEYVIEW2) {
+	if (IS_BYT) {
 		ret = atomisp_mrfld_power_up(isp);
 		if (ret)
 			return ret;
@@ -582,9 +588,9 @@ static int mrfld_csi_lane_config(struct atomisp_device *isp)
 		case ATOMISP_CAMERA_PORT_SECONDARY:
 			sensor_lanes[1] = mipi_info->num_lanes;
 			break;
-//		case ATOMISP_CAMERA_PORT_THIRD:
-//			sensor_lanes[2] = mipi_info->num_lanes;
-//			break;
+		case ATOMISP_CAMERA_PORT_THIRD:
+			sensor_lanes[2] = mipi_info->num_lanes;
+			break;
 		default:
 			dev_err(isp->dev,
 				"%s: invalid port: %d for the %dth sensor\n",

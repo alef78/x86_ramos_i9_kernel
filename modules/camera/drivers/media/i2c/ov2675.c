@@ -258,6 +258,7 @@ static int ov2675_write_reg_array(struct i2c_client *client,
 
 static int ov2675_s_color_effect(struct v4l2_subdev *sd, int effect)
 {
+pr_info("ov2675_s_color_effect\n");
 #if  0
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	struct ov2675_device *dev = to_ov2675_sensor(sd);
@@ -301,6 +302,7 @@ static int ov2675_s_color_effect(struct v4l2_subdev *sd, int effect)
 
 static int ov2675_g_color_effect(struct v4l2_subdev *sd, int *effect)
 {
+pr_info("ov2675_g_color_effect\n");
 	struct ov2675_device *dev = to_ov2675_sensor(sd);
 
 	*effect = dev->color_effect;
@@ -311,6 +313,7 @@ static int ov2675_g_color_effect(struct v4l2_subdev *sd, int *effect)
 /* calculate sysclk */
 static int ov2675_get_sysclk(struct v4l2_subdev *sd, unsigned int *sysclk)
 {
+pr_info("ov2675_get_sysclk\n");
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	// calculate sysclk
 	int err;
@@ -382,6 +385,7 @@ static int ov2675_get_sysclk(struct v4l2_subdev *sd, unsigned int *sysclk)
 /* read binning from register settings */
 static int ov2675_get_binning(struct v4l2_subdev *sd, unsigned int *binning)
 {
+pr_info("ov2675_get_binning\n");
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	int err;
 	u32 temp;
@@ -404,6 +408,7 @@ static int ov2675_get_binning(struct v4l2_subdev *sd, unsigned int *binning)
 /* read HTS from register settings */
 static int ov2675_get_hts(struct v4l2_subdev *sd, unsigned int *hts)
 {
+pr_info("ov2675_get_hts\n");
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	int err;
 	u32 val,extra_HTS;
@@ -427,6 +432,7 @@ static int ov2675_get_hts(struct v4l2_subdev *sd, unsigned int *hts)
 /* read VTS from register settings */
 static int ov2675_get_vts(struct v4l2_subdev *sd, unsigned int *vts)
 {
+pr_info("ov2675_get_vts\n");
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	int err;
 	u32 val,extra_VTS;
@@ -449,6 +455,7 @@ static int ov2675_get_vts(struct v4l2_subdev *sd, unsigned int *vts)
 /* write VTS to registers */
 static int ov2675_set_vts(struct v4l2_subdev *sd, unsigned int vts)
 {
+pr_info("ov2675_set_vts\n");
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 
 	return ov2675_write_reg(client, MISENSOR_16BIT,
@@ -458,6 +465,7 @@ static int ov2675_set_vts(struct v4l2_subdev *sd, unsigned int vts)
 /* read shutter, in number of line period */
 static int ov2675_get_shutter(struct v4l2_subdev *sd, int *shutter)
 {
+pr_info("ov2675_get_shutter\n");
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	int err;
 	u32 val, temp;
@@ -484,6 +492,7 @@ static int ov2675_get_shutter(struct v4l2_subdev *sd, int *shutter)
 /* write shutter, in number of line period */
 static int ov2675_set_shutter(struct v4l2_subdev *sd, unsigned int shutter)
 {
+pr_info("ov2675_set_shutter\n");
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	int err;
 	
@@ -500,6 +509,7 @@ static int ov2675_set_shutter(struct v4l2_subdev *sd, unsigned int shutter)
 /* read gain, 16 = 1x */
 static int ov2675_get_gain16(struct v4l2_subdev *sd, unsigned int *gain16)
 {
+pr_info("ov2675_get_gain16\n");
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	int err;
 	u32 val;
@@ -520,6 +530,7 @@ static int ov2675_get_gain16(struct v4l2_subdev *sd, unsigned int *gain16)
 /* write gain, 16 = 1x */
 static int ov2675_set_gain16(struct v4l2_subdev *sd, unsigned int capture_gain16)
 {
+pr_info("ov2675_set_gain16\n");
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	int gain =0 ;
 	if( capture_gain16 > 31)
@@ -554,6 +565,7 @@ static int ov2675_set_gain16(struct v4l2_subdev *sd, unsigned int capture_gain16
  */
 static int ov2675_get_exposure_bias(struct v4l2_subdev *sd, s32 *value)
 {
+pr_info("ov2675_get_exposure_bias\n");
 	*value = 0;
 
 	return 0;
@@ -564,6 +576,7 @@ static int ov2675_get_exposure_bias(struct v4l2_subdev *sd, s32 *value)
  */
 static int ov2675_get_iso(struct v4l2_subdev *sd, s32 *value)
 {
+pr_info("ov2675_get_iso\n");
 	u32 gain;
 	int err;
 
@@ -578,6 +591,7 @@ static int ov2675_get_iso(struct v4l2_subdev *sd, s32 *value)
 
 static int ov2675_g_image_brightness(struct v4l2_subdev *sd, int *brightness)
 {
+pr_info("ov2675_g_image_brightness\n");
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 
 	/* get target image luminance average */
@@ -590,6 +604,7 @@ static int ov2675_g_image_brightness(struct v4l2_subdev *sd, int *brightness)
 static int ov2675_get_light_frequency(struct v4l2_subdev *sd,
 				unsigned int *light_frequency)
 {
+pr_info("ov2675_get_light_frequency\n");
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	int err;
 	u32 temp;
@@ -627,6 +642,7 @@ static int ov2675_get_light_frequency(struct v4l2_subdev *sd,
 
 static int ov2675_set_bandingfilter(struct v4l2_subdev *sd)
 {
+pr_info("ov2675_set_banding_filter\n");
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	struct ov2675_device *dev = to_ov2675_sensor(sd);
 	u32 band_step60, max_band60, band_step50, max_band50;
@@ -690,6 +706,7 @@ static int ov2675_set_bandingfilter(struct v4l2_subdev *sd)
 
 static int ov2675_set_night_mode(struct v4l2_subdev *sd, int enable)
 {
+pr_info("ov2675_set_night_mode\n");
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	int temp;
 	int err;
@@ -716,6 +733,7 @@ static int ov2675_set_night_mode(struct v4l2_subdev *sd, int enable)
 
 static int ov2675_set_ag_ae(struct v4l2_subdev *sd, int enable)
 {
+pr_info("ov2675_set_ag_ae\n");
      
 	 struct i2c_client *client = v4l2_get_subdevdata(sd);
 	 int temp;
@@ -739,6 +757,7 @@ static int ov2675_set_ag_ae(struct v4l2_subdev *sd, int enable)
 
 static int ov2675_start_preview(struct v4l2_subdev *sd)
 {
+pr_info("ov2675_start_preview\n");
 	struct ov2675_device *dev = to_ov2675_sensor(sd);
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	int ret;
@@ -766,6 +785,7 @@ static int ov2675_start_preview(struct v4l2_subdev *sd)
 
 static int ov2675_stop_preview(struct v4l2_subdev *sd)
 {
+pr_info("ov2675_stop_preview\n");
 	struct ov2675_device *dev = to_ov2675_sensor(sd);
 	int err;
 
@@ -787,6 +807,7 @@ static int ov2675_stop_preview(struct v4l2_subdev *sd)
 
 static int ov2675_start_video(struct v4l2_subdev *sd)
 {
+pr_info("ov2675_start_video\n");
 	int err;
 
 	err = ov2675_set_bandingfilter(sd);
@@ -799,6 +820,7 @@ static int ov2675_start_video(struct v4l2_subdev *sd)
 
 static int ov2675_start_capture(struct v4l2_subdev *sd)
 {
+pr_info("ov2675_start_capture\n");
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	struct ov2675_device *dev = to_ov2675_sensor(sd);
 	u32 capture_sysclk, capture_hts, capture_vts, preview_binning;
@@ -908,6 +930,7 @@ static int ov2675_start_capture(struct v4l2_subdev *sd)
 
 static int ov2675_standby(struct v4l2_subdev *sd)
 {
+pr_info("ov2675_standby\n");
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 
 	return ov2675_write_reg_array(client, ov2675_standby_reg);
@@ -915,6 +938,7 @@ static int ov2675_standby(struct v4l2_subdev *sd)
 
 static int ov2675_wakeup(struct v4l2_subdev *sd)
 {
+pr_info("ov2675_wakeup\n");
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 
 	return ov2675_write_reg_array(client, ov2675_wakeup_reg);
@@ -922,6 +946,7 @@ static int ov2675_wakeup(struct v4l2_subdev *sd)
 
 static int __ov2675_init(struct v4l2_subdev *sd)
 {
+pr_info("ov2675_init\n");
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	int ret;
 
@@ -942,6 +967,7 @@ static int __ov2675_init(struct v4l2_subdev *sd)
 
 static int power_up(struct v4l2_subdev *sd)
 {
+pr_info("power_up\n");
 	struct ov2675_device *dev = to_ov2675_sensor(sd);
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	int ret;
@@ -985,6 +1011,7 @@ fail_power:
 
 static int power_down(struct v4l2_subdev *sd)
 {
+pr_info("power_down\n");
 	struct ov2675_device *dev = to_ov2675_sensor(sd);
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	int ret;
@@ -1016,6 +1043,7 @@ static int power_down(struct v4l2_subdev *sd)
 
 static int ov2675_s_power(struct v4l2_subdev *sd, int power)
 {
+pr_info("ov2675_s_power\n");
 	if (power == 0)
 		return power_down(sd);
 
@@ -1029,6 +1057,7 @@ static int ov2675_s_power(struct v4l2_subdev *sd, int power)
 
 static int ov2675_try_res(u32 *w, u32 *h)
 {
+pr_info("ov2675_try_res\n");
 	int i;
 
 	/*
@@ -1056,6 +1085,7 @@ static int ov2675_try_res(u32 *w, u32 *h)
 
 static struct ov2675_res_struct *ov2675_to_res(u32 w, u32 h)
 {
+pr_info("ov2675_to_res\n");
 	int  index;
 
 	for (index = 0; index < N_RES; index++) {
@@ -1074,16 +1104,22 @@ static struct ov2675_res_struct *ov2675_to_res(u32 w, u32 h)
 static int ov2675_try_mbus_fmt(struct v4l2_subdev *sd,
 				struct v4l2_mbus_framefmt *fmt)
 {
+pr_info("ov2675_try_mbus_fmt\n");
 	return ov2675_try_res(&fmt->width, &fmt->height);
 }
 
 static int ov2675_res2size(unsigned int res, int *h_size, int *v_size)
 {
+pr_info("ov2675_res2size\n");
 	unsigned short hsize;
 	unsigned short vsize;
 
 	switch (res) {
 	
+	case OV2675_RES_QCIF:
+		hsize = OV2675_RES_QCIF_SIZE_H;
+		vsize = OV2675_RES_QCIF_SIZE_V;
+		break;
 	case OV2675_RES_VGA:
 		hsize = OV2675_RES_VGA_SIZE_H;
 		vsize = OV2675_RES_VGA_SIZE_V;
@@ -1121,6 +1157,7 @@ static int ov2675_res2size(unsigned int res, int *h_size, int *v_size)
 static int ov2675_g_mbus_fmt(struct v4l2_subdev *sd,
 				struct v4l2_mbus_framefmt *fmt)
 {
+pr_info("ov2675_g_mbus_fmt\n");
 	struct ov2675_device *dev = to_ov2675_sensor(sd);
 	int width, height;
 	int ret;
@@ -1137,6 +1174,7 @@ static int ov2675_g_mbus_fmt(struct v4l2_subdev *sd,
 static int ov2675_s_mbus_fmt(struct v4l2_subdev *sd,
 			      struct v4l2_mbus_framefmt *fmt)
 {
+pr_info("ov2675_s_mbus_fmt\n");
 	struct i2c_client *c = v4l2_get_subdevdata(sd);
 	struct ov2675_device *dev = to_ov2675_sensor(sd);
 	struct ov2675_res_struct *res_index;
@@ -1222,6 +1260,7 @@ static int ov2675_s_mbus_fmt(struct v4l2_subdev *sd,
 
 static int ov2675_detect(struct i2c_client *client,  u16 *id, u8 *revision)
 {
+pr_info("ov2675_detect\n");
 	struct i2c_adapter *adapter = client->adapter;
 	u32 retvalue;
 
@@ -1251,6 +1290,7 @@ static int ov2675_detect(struct i2c_client *client,  u16 *id, u8 *revision)
 static int
 ov2675_s_config(struct v4l2_subdev *sd, int irq, void *platform_data)
 {
+pr_info("ov2675_s_config\n");
 	struct ov2675_device *dev = to_ov2675_sensor(sd);
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	u8 sensor_revision;
@@ -1306,12 +1346,14 @@ fail_detect:
 
 static int ov2675_g_focal(struct v4l2_subdev *sd, s32 *val)
 {
+pr_info("ov2675_g_focal\n");
 	*val = (OV2675_FOCAL_LENGTH_NUM << 16) | OV2675_FOCAL_LENGTH_DEM;
 	return 0;
 }
 
 static int ov2675_g_fnumber(struct v4l2_subdev *sd, s32 *val)
 {
+pr_info("ov2675_g_fnumber\n");
 	/* const f number for OV2675 */
 	*val = (OV2675_F_NUMBER_DEFAULT_NUM << 16) | OV2675_F_NUMBER_DEM;
 	return 0;
@@ -1319,6 +1361,7 @@ static int ov2675_g_fnumber(struct v4l2_subdev *sd, s32 *val)
 
 static int ov2675_g_fnumber_range(struct v4l2_subdev *sd, s32 *val)
 {
+pr_info("ov2675_g_fnumber_range\n");
 	*val = (OV2675_F_NUMBER_DEFAULT_NUM << 24) |
 		(OV2675_F_NUMBER_DEM << 16) |
 		(OV2675_F_NUMBER_DEFAULT_NUM << 8) | OV2675_F_NUMBER_DEM;
@@ -1326,6 +1369,7 @@ static int ov2675_g_fnumber_range(struct v4l2_subdev *sd, s32 *val)
 }
 static int ov2675_s_freq(struct v4l2_subdev *sd, s32  val)
 {
+pr_info("ov2675_s_freq\n");
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	struct ov2675_device *dev = to_ov2675_sensor(sd);
 	int ret;	
@@ -1462,7 +1506,7 @@ static struct ov2675_control ov2675_controls[] = {
 			.type = V4L2_CTRL_TYPE_MENU,
 			.name = "Light frequency filter",
 			.minimum = 1,
-			.maximum =  2, /* 1: 50Hz, 2:60Hz */
+			.maximum =  2, // 1: 50Hz, 2:60Hz 
 			.step = 1,
 			.default_value = 1,
 			.flags = 0,
@@ -1485,6 +1529,7 @@ static struct ov2675_control *ov2675_find_control(__u32 id)
 
 static int ov2675_queryctrl(struct v4l2_subdev *sd, struct v4l2_queryctrl *qc)
 {
+pr_info("ov2675_query_ctrl id=%x\n",qc->id);
 	struct ov2675_control *ctrl = ov2675_find_control(qc->id);
 
 	if (ctrl == NULL)
@@ -1495,11 +1540,16 @@ static int ov2675_queryctrl(struct v4l2_subdev *sd, struct v4l2_queryctrl *qc)
 
 static int ov2675_g_ctrl(struct v4l2_subdev *sd, struct v4l2_control *ctrl)
 {
+pr_info("ov2675_g_ctrl id=%x\n",ctrl->id);
+if (ctrl->id==V4L2_CID_BIN_FACTOR_HORZ) return 0;
+if (ctrl->id==V4L2_CID_BIN_FACTOR_VERT) return 0;
 	struct ov2675_control *octrl = ov2675_find_control(ctrl->id);
 	int ret;
 
-	if (octrl == NULL)
+	if (octrl == NULL) {
+pr_info("ov2675_g_ctrl invalid id=%x\n",ctrl->id);
 		return -EINVAL;
+	}
 
 	ret = octrl->query(sd, &ctrl->value);
 	if (ret < 0)
@@ -1510,11 +1560,14 @@ static int ov2675_g_ctrl(struct v4l2_subdev *sd, struct v4l2_control *ctrl)
 
 static int ov2675_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *ctrl)
 {
+pr_info("ov2675_s_ctrl id=%x\n",ctrl->id);
 	struct ov2675_control *octrl = ov2675_find_control(ctrl->id);
 	int ret;
 
-	if (!octrl || !octrl->tweak)
+	if (!octrl || !octrl->tweak) {
+pr_info("ov2675_s_ctrl invalid id=%x\n",ctrl->id);
 		return -EINVAL;
+	}
 
 	ret = octrl->tweak(sd, ctrl->value);
 	if (ret < 0)
@@ -1525,6 +1578,7 @@ static int ov2675_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *ctrl)
 
 static int ov2675_s_stream(struct v4l2_subdev *sd, int enable)
 {
+pr_info("ov2675_s_stream\n");
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	struct ov2675_device *dev = to_ov2675_sensor(sd);
 	int err;
@@ -1574,6 +1628,7 @@ static int ov2675_s_stream(struct v4l2_subdev *sd, int enable)
 static int
 ov2675_enum_framesizes(struct v4l2_subdev *sd, struct v4l2_frmsizeenum *fsize)
 {
+pr_info("ov2675_enum_framesizes\n");
 	unsigned int index = fsize->index;
 
 	if (index >= N_RES)
@@ -1591,6 +1646,7 @@ ov2675_enum_framesizes(struct v4l2_subdev *sd, struct v4l2_frmsizeenum *fsize)
 static int ov2675_enum_frameintervals(struct v4l2_subdev *sd,
 				       struct v4l2_frmivalenum *fival)
 {
+pr_info("ov2675_enum_frameintervals\n");
 	unsigned int index = fival->index;
 	int i;
 

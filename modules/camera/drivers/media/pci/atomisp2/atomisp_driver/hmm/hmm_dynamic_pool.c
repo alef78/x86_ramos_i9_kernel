@@ -55,6 +55,7 @@ static unsigned int get_pages_from_dynamic_pool(void *pool,
 						struct hmm_page, list);
 
 			list_del(&hmm_page->list);
+			dypool_info->pgnr--;
 			spin_unlock_irqrestore(&dypool_info->list_lock, flags);
 
 			page_obj[i].page = hmm_page->page;
@@ -96,6 +97,16 @@ static void free_pages_to_dynamic_pool(void *pool,
 
 	if (page_obj->type == HMM_PAGE_TYPE_RESERVED)
 		return;
+
+	if (dypool_info->pgnr >= dypool_info->pool_size) {
+		/* free page directly back to system */
+		ret = set_pages_wb(page_obj->page, 1);
+		if (ret)
+			dev_err(atomisp_dev, "set page to WB err ...\n");
+		__free_pages(page_obj->page, 0);
+
+		return;
+	}
 #ifdef USE_KMEM_CACHE
 	hmm_page = kmem_cache_zalloc(dypool_info->pgptr_cache,
 						GFP_KERNEL);
@@ -121,6 +132,7 @@ static void free_pages_to_dynamic_pool(void *pool,
 	 */
 	spin_lock_irqsave(&dypool_info->list_lock, flags);
 	list_add_tail(&hmm_page->list, &dypool_info->pages_list);
+	dypool_info->pgnr++;
 	spin_unlock_irqrestore(&dypool_info->list_lock, flags);
 }
 
@@ -151,6 +163,8 @@ static int hmm_dynamic_pool_init(void **pool, unsigned int pool_size)
 	INIT_LIST_HEAD(&dypool_info->pages_list);
 	spin_lock_init(&dypool_info->list_lock);
 	dypool_info->initialized = true;
+	dypool_info->pool_size = pool_size;
+	dypool_info->pgnr = 0;
 
 	*pool = dypool_info;
 

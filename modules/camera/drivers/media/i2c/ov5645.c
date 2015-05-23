@@ -967,14 +967,14 @@ static int ov5645_start_preview(struct v4l2_subdev *sd)
 	int ret;
 	dev->preview_ag_ae = false;
 	u32 retvalue;
-#if 0
+#if 1
 	ret = ov5645_set_awb_gain_mode(sd, OV5645_AWB_GAIN_AUTO);
 	if (ret)
 		return ret;
 #endif
-	ret = ov5645_set_gain16(sd, dev->preview_gain16);
-	if (ret)
-		return ret;
+	//ret = ov5645_set_gain16(sd, dev->preview_gain16);
+	//if (ret)
+	//	return ret;
 
 	ret = ov5645_set_shutter(sd, dev->preview_shutter);
 	if (ret)
@@ -2189,7 +2189,7 @@ static int ov5645_s_stream(struct v4l2_subdev *sd, int enable)
 			return err;
 
 		dev->streaming = true;
-		//err =dev->platform_data->platform_vcm(sd, 1);
+		err =dev->platform_data->platform_vcm(sd, 1);
 		if (err)
 			return err;
 		if (dev->focus_mode_change) {
@@ -2202,7 +2202,7 @@ static int ov5645_s_stream(struct v4l2_subdev *sd, int enable)
 			dev->focus_mode_change = false;
 		}
 	} else {
-		//err =dev->platform_data->platform_vcm(sd, 0);
+		err =dev->platform_data->platform_vcm(sd, 0);
 		if (err)
 			return err;
 		if (dev->run_mode == CI_MODE_PREVIEW) {

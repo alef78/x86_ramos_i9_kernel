@@ -18,21 +18,26 @@
 #include <media/v4l2-subdev.h>
 #include <asm/intel-mid.h>
 #include "platform_camera.h"
+#include "platform_ov5645.h"
+#include "platform_ov2675.h"
 #include "platform_imx175.h"
 #include "platform_imx134.h"
 #include "platform_ov2722.h"
 #include "platform_ov5693.h"
 #include "platform_lm3554.h"
 #include "platform_ap1302.h"
+#ifdef CONFIG_CRYSTAL_COVE
+#include <linux/mfd/intel_mid_pmic.h>
+#endif
 
 /*
  * TODO: Check whether we can move this info to OEM table or
  *       set this info in the platform data of each sensor
  */
 const struct intel_v4l2_subdev_id v4l2_ids[] = {
-	// ramos i9 cameras. verified by objdump
 	{"ov5645", SOC_CAMERA, ATOMISP_CAMERA_PORT_PRIMARY},
 	{"ov2675", SOC_CAMERA, ATOMISP_CAMERA_PORT_SECONDARY},
+
 	{"mt9e013", RAW_CAMERA, ATOMISP_CAMERA_PORT_PRIMARY},
 	{"ov8830", RAW_CAMERA, ATOMISP_CAMERA_PORT_PRIMARY},
 	{"imx175", RAW_CAMERA, ATOMISP_CAMERA_PORT_PRIMARY},
@@ -51,9 +56,6 @@ const struct intel_v4l2_subdev_id v4l2_ids[] = {
 	{"lm3554", LED_FLASH, -1},
 	{"lm3559", LED_FLASH, -1},
 	{"lm3560", LED_FLASH, -1},
-	{"xactor_a", SOC_CAMERA, ATOMISP_CAMERA_PORT_PRIMARY},
-	{"xactor_b", SOC_CAMERA, ATOMISP_CAMERA_PORT_SECONDARY},
-	{"xactor_c", SOC_CAMERA, ATOMISP_CAMERA_PORT_TERTIARY},
 	{},
 };
 
@@ -481,6 +483,44 @@ const struct camera_af_platform_data *camera_get_af_platform_data(void)
 	return &platform_data;
 }
 EXPORT_SYMBOL_GPL(camera_get_af_platform_data);
+
+#ifdef CONFIG_CRYSTAL_COVE
+/*
+ * WA for BTY as simple VRF management
+ */
+int camera_set_pmic_power(enum camera_pmic_pin pin, bool flag)
+{
+	u8 reg_addr[CAMERA_POWER_NUM] = {VPROG_1P8V, VPROG_2P8V};
+	u8 reg_value[2] = {VPROG_DISABLE, VPROG_ENABLE};
+	static struct vprog_status status[CAMERA_POWER_NUM];
+	static DEFINE_MUTEX(mutex_power);
+	int ret = 0;
+
+	mutex_lock(&mutex_power);
+	/*
+	 * only set power at:
+	 * first to power on
+	 * last to power off
+	 */
+	if ((flag && status[pin].user == 0)
+	    || (!flag && status[pin].user == 1))
+		ret = intel_mid_pmic_writeb(reg_addr[pin], reg_value[flag]);
+
+	/* no update counter if config failed */
+	if (ret)
+		goto done;
+
+	if (flag)
+		status[pin].user++;
+	else
+		if (status[pin].user)
+			status[pin].user--;
+done:
+	mutex_unlock(&mutex_power);
+	return ret;
+}
+EXPORT_SYMBOL_GPL(camera_set_pmic_power);
+#endif
 
 #ifdef CONFIG_ACPI
 void __init camera_init_device(void)

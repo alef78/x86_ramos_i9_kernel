@@ -793,8 +793,8 @@ static int ov2675_start_video(struct v4l2_subdev *sd)
 	if (err)
 		return err;
 
-	//return ov2675_set_night_mode(sd, 0);
-       return 0;
+	return ov2675_set_night_mode(sd, 0);
+       //return 0;
 }
 
 static int ov2675_start_capture(struct v4l2_subdev *sd)

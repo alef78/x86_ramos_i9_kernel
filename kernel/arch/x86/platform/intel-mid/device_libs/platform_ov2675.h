@@ -1,7 +1,8 @@
 /*
  * platform_ov2675.h: ov2675 platform data header file
  *
- * Author: Alexandr Efimov <alef78@yandex.ru>
+ * (C) Copyright 2012 Intel Corporation
+ * Author:
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License

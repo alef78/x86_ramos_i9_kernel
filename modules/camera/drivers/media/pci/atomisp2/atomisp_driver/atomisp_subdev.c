@@ -43,12 +43,12 @@ const struct atomisp_in_fmt_conv atomisp_in_fmt_conv[] = {
 	{ V4L2_MBUS_FMT_SGBRG10_1X10, 10, 10, CSS_FORMAT_RAW_10, CSS_BAYER_ORDER_GBRG },
 	{ V4L2_MBUS_FMT_SGRBG10_1X10, 10, 10, CSS_FORMAT_RAW_10, CSS_BAYER_ORDER_GRBG },
 	{ V4L2_MBUS_FMT_SRGGB10_1X10, 10, 10, CSS_FORMAT_RAW_10, CSS_BAYER_ORDER_RGGB },
-#ifndef CONFIG_VIDEO_ATOMISP_CSS20
+#ifndef CSS20
 	{ V4L2_MBUS_FMT_SBGGR10_DPCM8_1X8, 10, 8, CSS_FORMAT_RAW_8, CSS_BAYER_ORDER_BGGR },
 	{ V4L2_MBUS_FMT_SGBRG10_DPCM8_1X8, 10, 8, CSS_FORMAT_RAW_8, CSS_BAYER_ORDER_GBRG },
 	{ V4L2_MBUS_FMT_SGRBG10_DPCM8_1X8, 10, 8, CSS_FORMAT_RAW_8, CSS_BAYER_ORDER_GRBG },
 	{ V4L2_MBUS_FMT_SRGGB10_DPCM8_1X8, 10, 8, CSS_FORMAT_RAW_8, CSS_BAYER_ORDER_RGGB },
-#endif /* CONFIG_VIDEO_ATOMISP_CSS20 */
+#endif /* CSS20 */
 	{ V4L2_MBUS_FMT_SBGGR12_1X12, 12, 12, CSS_FORMAT_RAW_12, CSS_BAYER_ORDER_BGGR },
 	{ V4L2_MBUS_FMT_SGBRG12_1X12, 12, 12, CSS_FORMAT_RAW_12, CSS_BAYER_ORDER_GBRG },
 	{ V4L2_MBUS_FMT_SGRBG12_1X12, 12, 12, CSS_FORMAT_RAW_12, CSS_BAYER_ORDER_GRBG },
@@ -314,7 +314,8 @@ static int isp_subdev_get_selection(struct v4l2_subdev *sd,
 static char *atomisp_pad_str[] = { "ATOMISP_SUBDEV_PAD_SINK",
 				   "ATOMISP_SUBDEV_PAD_SOURCE_CAPTURE",
 				   "ATOMISP_SUBDEV_PAD_SOURCE_VF",
-				   "ATOMISP_SUBDEV_PAD_SOURCE_PREVIEW" };
+				   "ATOMISP_SUBDEV_PAD_SOURCE_PREVIEW",
+				   "ATOMISP_SUBDEV_PAD_SOURCE_VIDEO"};
 
 int atomisp_subdev_set_selection(struct v4l2_subdev *sd,
 				 struct v4l2_subdev_fh *fh, uint32_t which,
@@ -368,7 +369,8 @@ int atomisp_subdev_set_selection(struct v4l2_subdev *sd,
 			isp_sd->params.video_dis_en = 0;
 
 		if (isp_sd->params.video_dis_en &&
-		    isp_sd->run_mode->val == ATOMISP_RUN_MODE_VIDEO) {
+		    isp_sd->run_mode->val == ATOMISP_RUN_MODE_VIDEO &&
+		    !isp_sd->continuous_mode->val) {
 			/* This resolution contains 20 % of DVS slack
 			 * (of the desired captured image before
 			 * scaling, or 1 / 6 of what we get from the
@@ -385,7 +387,7 @@ int atomisp_subdev_set_selection(struct v4l2_subdev *sd,
 
 		if (!(flags & V4L2_SEL_FLAG_KEEP_CONFIG)) {
 			for (i = ATOMISP_SUBDEV_PAD_SOURCE_CAPTURE;
-			     i <= ATOMISP_SUBDEV_PAD_SOURCE_PREVIEW; i++) {
+			     i < ATOMISP_SUBDEV_PADS_NUM; i++) {
 				struct v4l2_rect tmp = *crop[pad];
 
 				atomisp_subdev_set_selection(
@@ -413,7 +415,8 @@ int atomisp_subdev_set_selection(struct v4l2_subdev *sd,
 
 		break;
 	}
-	case ATOMISP_SUBDEV_PAD_SOURCE_CAPTURE: {
+	case ATOMISP_SUBDEV_PAD_SOURCE_CAPTURE:
+	case ATOMISP_SUBDEV_PAD_SOURCE_VIDEO: {
 		/* Only compose target is supported on source pads. */
 
 		if (isp_sd->vfpp->val == ATOMISP_VFPP_DISABLE_LOWLAT) {
@@ -545,6 +548,7 @@ void atomisp_subdev_set_ffmt(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh,
 	case ATOMISP_SUBDEV_PAD_SOURCE_CAPTURE:
 	case ATOMISP_SUBDEV_PAD_SOURCE_PREVIEW:
 	case ATOMISP_SUBDEV_PAD_SOURCE_VF:
+	case ATOMISP_SUBDEV_PAD_SOURCE_VIDEO:
 		__ffmt->code = ffmt->code;
 		break;
 	}
@@ -676,6 +680,10 @@ static int isp_subdev_link_setup(struct media_entity *entity,
 		break;
 
 	case ATOMISP_SUBDEV_PAD_SOURCE_CAPTURE | MEDIA_ENT_T_DEVNODE:
+		/* always write to memory */
+		break;
+
+	case ATOMISP_SUBDEV_PAD_SOURCE_VIDEO | MEDIA_ENT_T_DEVNODE:
 		/* always write to memory */
 		break;
 
@@ -899,6 +907,7 @@ static int isp_subdev_init_entities(struct atomisp_sub_device *asd)
 	pads[ATOMISP_SUBDEV_PAD_SOURCE_PREVIEW].flags = MEDIA_PAD_FL_SOURCE;
 	pads[ATOMISP_SUBDEV_PAD_SOURCE_VF].flags = MEDIA_PAD_FL_SOURCE;
 	pads[ATOMISP_SUBDEV_PAD_SOURCE_CAPTURE].flags = MEDIA_PAD_FL_SOURCE;
+	pads[ATOMISP_SUBDEV_PAD_SOURCE_VIDEO].flags = MEDIA_PAD_FL_SOURCE;
 
 	asd->fmt[ATOMISP_SUBDEV_PAD_SINK].fmt.code =
 		V4L2_MBUS_FMT_SBGGR10_1X10;
@@ -907,6 +916,8 @@ static int isp_subdev_init_entities(struct atomisp_sub_device *asd)
 	asd->fmt[ATOMISP_SUBDEV_PAD_SOURCE_VF].fmt.code =
 		V4L2_MBUS_FMT_SBGGR10_1X10;
 	asd->fmt[ATOMISP_SUBDEV_PAD_SOURCE_CAPTURE].fmt.code =
+		V4L2_MBUS_FMT_SBGGR10_1X10;
+	asd->fmt[ATOMISP_SUBDEV_PAD_SOURCE_VIDEO].fmt.code =
 		V4L2_MBUS_FMT_SBGGR10_1X10;
 
 	me->ops = &isp_subdev_media_ops;
@@ -927,6 +938,9 @@ static int isp_subdev_init_entities(struct atomisp_sub_device *asd)
 	atomisp_init_subdev_pipe(asd, &asd->video_out_capture,
 			V4L2_BUF_TYPE_VIDEO_CAPTURE);
 
+	atomisp_init_subdev_pipe(asd, &asd->video_out_video_capture,
+			V4L2_BUF_TYPE_VIDEO_CAPTURE);
+
 	ret = atomisp_video_init(&asd->video_in, "MEMORY");
 	if (ret < 0)
 		return ret;
@@ -940,6 +954,10 @@ static int isp_subdev_init_entities(struct atomisp_sub_device *asd)
 		return ret;
 
 	ret = atomisp_video_init(&asd->video_out_preview, "PREVIEW");
+	if (ret < 0)
+		return ret;
+
+	ret = atomisp_video_init(&asd->video_out_video_capture, "VIDEO");
 	if (ret < 0)
 		return ret;
 
@@ -964,6 +982,12 @@ static int isp_subdev_init_entities(struct atomisp_sub_device *asd)
 	ret = media_entity_create_link(&asd->subdev.entity,
 		ATOMISP_SUBDEV_PAD_SOURCE_CAPTURE,
 		&asd->video_out_capture.vdev.entity, 0, 0);
+	if (ret < 0)
+		return ret;
+
+	ret = media_entity_create_link(&asd->subdev.entity,
+		ATOMISP_SUBDEV_PAD_SOURCE_VIDEO,
+		&asd->video_out_video_capture.vdev.entity, 0, 0);
 	if (ret < 0)
 		return ret;
 
@@ -1008,6 +1032,7 @@ void atomisp_subdev_unregister_entities(struct atomisp_sub_device *asd)
 	atomisp_video_unregister(&asd->video_out_preview);
 	atomisp_video_unregister(&asd->video_out_vf);
 	atomisp_video_unregister(&asd->video_out_capture);
+	atomisp_video_unregister(&asd->video_out_video_capture);
 }
 
 int atomisp_subdev_register_entities(struct atomisp_sub_device *asd,
@@ -1029,6 +1054,10 @@ int atomisp_subdev_register_entities(struct atomisp_sub_device *asd,
 		goto error;
 
 	ret = atomisp_video_register(&asd->video_out_preview, vdev);
+	if (ret < 0)
+		goto error;
+
+	ret = atomisp_video_register(&asd->video_out_video_capture, vdev);
 	if (ret < 0)
 		goto error;
 
@@ -1067,7 +1096,7 @@ int atomisp_subdev_init(struct atomisp_device *isp)
 	 * CSS2.0 running ISP2400 support
 	 * multiple streams
 	 */
-	isp->num_of_streams = isp->media_dev.driver_version ==
+	isp->num_of_streams = isp->media_dev.driver_version >=
 	    ATOMISP_CSS_VERSION_20 ? 2 : 1;
 	isp->asd = devm_kzalloc(isp->dev, sizeof(struct atomisp_sub_device) *
 			       isp->num_of_streams, GFP_KERNEL);

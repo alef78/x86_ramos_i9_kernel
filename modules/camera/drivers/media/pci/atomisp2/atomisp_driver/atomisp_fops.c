@@ -490,8 +490,9 @@ static int atomisp_open(struct file *file)
 init_subdev: /* For CTP CSS1.5, below init depends on css global init */
 	if (atomisp_subdev_users(asd))
 		goto done;
-
+pr_info("atom subdev users was 0\n");
 	atomisp_subdev_init_struct(asd);
+pr_info("atom subdev init done\n");
 
 done:
 	pipe->users++;

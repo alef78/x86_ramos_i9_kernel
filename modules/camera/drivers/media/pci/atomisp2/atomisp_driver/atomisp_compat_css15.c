@@ -964,6 +964,7 @@ int atomisp_get_css_frame_info(struct atomisp_sub_device *asd,
 
 	switch (source_pad) {
 	case ATOMISP_SUBDEV_PAD_SOURCE_CAPTURE:
+	case ATOMISP_SUBDEV_PAD_SOURCE_VIDEO:
 		if (asd->run_mode->val == ATOMISP_RUN_MODE_VIDEO
 		    || asd->vfpp->val == ATOMISP_VFPP_DISABLE_SCALER)
 			ret = sh_css_video_get_output_frame_info(frame_info);

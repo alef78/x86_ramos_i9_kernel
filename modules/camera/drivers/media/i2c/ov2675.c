@@ -168,61 +168,6 @@ again:
 	return num_msg;
 }
 
-static int ov2675_i2c_write(struct i2c_client *client, u16 len, u8 *data)
-{
-	struct i2c_msg msg;
-	int ret;
-	int retry = 0;
-
-again:
-	msg.addr = client->addr;
-	msg.flags = 0;
-	msg.len = len;
-	msg.buf = data;
-
-	ret = i2c_transfer(client->adapter, &msg, 1);
-
-	/*
-	 * It is said that Rev 2 sensor needs some delay here otherwise
-	 * registers do not seem to load correctly. But tests show that
-	 * removing the delay would not cause any in-stablility issue and the
-	 * delay will cause serious performance down, so, removed previous
-	 * mdelay(1) here.
-	 */
-
-	if (ret == 1)
-		return 0;
-
-	if (retry <= I2C_RETRY_COUNT) {
-		dev_dbg(&client->dev, "retrying i2c write transfer... %d",
-			retry);
-		retry++;
-		msleep(20);
-		goto again;
-	}
-
-	return ret;
-}
-
-/*
- * __ov2675_flush_reg_array() is internal function to make writing reg
- * faster and should be not used anywhere else.
- */
-static int __ov2675_flush_reg_array(struct i2c_client *client,
-				     struct ov2675_write_ctrl *ctrl)
-{
-	u16 size;
-
-	if (ctrl->index == 0)
-		return 0;
-
-	size = sizeof(u16) + ctrl->index; /* 16-bit address + data */
-	ctrl->buffer.addr = cpu_to_be16(ctrl->buffer.addr);
-	ctrl->index = 0;
-
-	return ov2675_i2c_write(client, size, (u8 *)&ctrl->buffer);
-}
-
 /*
  * ov2675_write_reg_array - Initializes a list of MT9T111 registers
  * @client: i2c driver client structure
@@ -1206,6 +1151,7 @@ pr_info("ov2675_s_mbus_fmt\n");
 		ret = ov2675_write_reg_array(c, ov2675_480p_init);
 		break;
 	case OV2675_RES_720P:
+	//TODO: check some flag and wirte ov2675_init here!
 		ret = ov2675_write_reg_array(c, ov2675_720p_init);
 		break;
 	case OV2675_RES_1M:
@@ -1521,8 +1467,10 @@ static struct ov2675_control *ov2675_find_control(__u32 id)
 	int i;
 
 	for (i = 0; i < N_CONTROLS; i++) {
-		if (ov2675_controls[i].qc.id == id)
+		if (ov2675_controls[i].qc.id == id) {
+pr_info("ov2675_find_control %s\n", &ov2675_controls[i].qc.name);
 			return &ov2675_controls[i];
+		}
 	}
 	return NULL;
 }
@@ -1541,8 +1489,8 @@ pr_info("ov2675_query_ctrl id=%x\n",qc->id);
 static int ov2675_g_ctrl(struct v4l2_subdev *sd, struct v4l2_control *ctrl)
 {
 pr_info("ov2675_g_ctrl id=%x\n",ctrl->id);
-if (ctrl->id==V4L2_CID_BIN_FACTOR_HORZ) return 0;
-if (ctrl->id==V4L2_CID_BIN_FACTOR_VERT) return 0;
+//if (ctrl->id==V4L2_CID_BIN_FACTOR_HORZ) return 0;
+//if (ctrl->id==V4L2_CID_BIN_FACTOR_VERT) return 0;
 	struct ov2675_control *octrl = ov2675_find_control(ctrl->id);
 	int ret;
 
@@ -1683,6 +1631,7 @@ static int ov2675_enum_mbus_code(struct v4l2_subdev *sd,
 				  struct v4l2_subdev_fh *fh,
 				  struct v4l2_subdev_mbus_code_enum *code)
 {
+pr_info("ov2675_enum_mbus_code idx=%d\n",code->index);
 	if (code->index)
 		return -EINVAL;
 	code->code = V4L2_MBUS_FMT_SGRBG10_1X10;
@@ -1694,6 +1643,7 @@ static int ov2675_enum_frame_size(struct v4l2_subdev *sd,
 	struct v4l2_subdev_fh *fh,
 	struct v4l2_subdev_frame_size_enum *fse)
 {
+pr_info("ov2675_enum_frame_size\n");
 	unsigned int index = fse->index;
 
 	if (index >= N_RES)
@@ -1711,6 +1661,7 @@ static int
 ov2675_get_pad_format(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh,
 		       struct v4l2_subdev_format *fmt)
 {
+pr_info("ov2675_get_pad_format\n");
 	struct ov2675_device *snr = to_ov2675_sensor(sd);
 
 	switch (fmt->which) {
@@ -1728,6 +1679,7 @@ static int
 ov2675_set_pad_format(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh,
 		       struct v4l2_subdev_format *fmt)
 {
+pr_info("ov2675_set_pad_format\n");
 	struct ov2675_device *snr = to_ov2675_sensor(sd);
 
 	if (fmt->which == V4L2_SUBDEV_FORMAT_ACTIVE)
@@ -1740,9 +1692,13 @@ ov2675_set_pad_format(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh,
 static int
 ov2675_g_parm(struct v4l2_subdev *sd, struct v4l2_streamparm *param)
 {
+pr_info("ov2675_g_parm g_parm=%d\n", param->type);
+int type=param->type;
+	//if (param->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
+	//	return -EINVAL;
 	struct ov2675_device *dev = to_ov2675_sensor(sd);
 	memset(param, 0, sizeof(*param));
-	param->type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	param->type = type;//V4L2_BUF_TYPE_VIDEO_CAPTURE;
 
 	if (dev->res >= 0 && dev->res < N_RES) {
 		param->parm.capture.capability = V4L2_CAP_TIMEPERFRAME;
@@ -1757,6 +1713,9 @@ ov2675_g_parm(struct v4l2_subdev *sd, struct v4l2_streamparm *param)
 static int
 ov2675_s_parm(struct v4l2_subdev *sd, struct v4l2_streamparm *param)
 {
+pr_info("ov2675_s_parm type=%d\n", param->type);
+	//if (param->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
+	//	return -EINVAL;
 	struct ov2675_device *dev = to_ov2675_sensor(sd);
 	dev->run_mode = param->parm.capture.capturemode;
 	return ov2675_g_parm(sd, param);
@@ -1767,6 +1726,7 @@ ov2675_g_skip_frames(struct v4l2_subdev *sd, u32 *frames)
 {
 	int index;
 	struct ov2675_device *snr = to_ov2675_sensor(sd);
+pr_info("ov2675_g_skip_frames id=%d\n",snr->res);
 
 	for (index = 0; index < N_RES; index++) {
 		if (ov2675_res[index].res == snr->res) {
@@ -1774,6 +1734,7 @@ ov2675_g_skip_frames(struct v4l2_subdev *sd, u32 *frames)
 			return 0;
 		}
 	}
+pr_info("ov2675_g_skip_frames fail id=%d\n",snr->res);
 	return -EINVAL;
 }
 

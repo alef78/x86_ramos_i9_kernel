@@ -124,6 +124,7 @@
 /** Signed fixed point value, 0 integer bits, 15 fractional bits */
 #define s0_15 signed int
 
+typedef uint32_t ia_css_ptr;
 /** Frame formats, some of these come from fourcc.org, others are
    better explained by video4linux2. The NV11 seems to be described only
    on MSDN pages, but even those seem to be gone now.

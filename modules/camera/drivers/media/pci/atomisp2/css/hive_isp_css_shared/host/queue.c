@@ -521,7 +521,7 @@ static bool is_sp_queue_full(
 	load_sp_queue (offset, &cb_size, NULL, &cb_start, &cb_end);
 
 	/* check whether the queue is full or not */
-	is_full = (0 == cb_size) ? true : ((cb_end + 1) % cb_size == cb_start);
+	is_full = (cb_size == 0) ? true : ((cb_end + 1) % cb_size == cb_start);
 
 	return is_full;
 }
@@ -592,7 +592,7 @@ static bool is_sp_queue_empty(
 	load_sp_queue (offset, &cb_size, NULL, &cb_start, &cb_end);
 
 	/* check whether the queue is full or not */
-	is_empty = (0 == cb_size) ? true : (cb_start == cb_end);
+	is_empty = (cb_size == 0) ? true: (cb_start == cb_end);
 
 	return is_empty;
 }

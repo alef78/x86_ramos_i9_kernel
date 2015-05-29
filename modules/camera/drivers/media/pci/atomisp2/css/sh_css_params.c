@@ -3259,6 +3259,65 @@ struct sh_css_morph_table *sh_css_morph_table_allocate(
 	return me;
 }
 
+/* This function adds phase shift (1/2 pixel) to the color components. 
+ * This is required as we are also doing upscale&interpolation in the GDC. */
+static enum sh_css_err sh_css_params_morph_table_shift_phase(
+	const struct sh_css_morph_table *in_table,
+	const struct sh_css_binary *binary,
+	struct sh_css_morph_table **out_table)
+{
+	// TODO: Remove the hardcoded value. Currently, there is
+	// no defined GDC MACRO to use for all the systems.
+	short shift_val = (1<<4) / 2;
+	short phase_shift_x[SH_CSS_MORPH_TABLE_NUM_PLANES]
+				= { 0, shift_val, 0, shift_val, shift_val, 0 },
+	      phase_shift_y[SH_CSS_MORPH_TABLE_NUM_PLANES]
+				= { shift_val, shift_val, 0, 0, 0, shift_val };
+	unsigned int i, j, k,
+		     width,
+		     height;
+	struct sh_css_morph_table *tab;
+
+	sh_css_dtrace(SH_DBG_TRACE_PRIVATE,
+		"sh_css_params_morph_table_shift_phase() enter:\n");
+
+	assert(in_table != NULL);
+	if (in_table == NULL)
+		return sh_css_err_internal_error;
+
+	assert(binary != NULL);
+	if (binary == NULL)
+		return sh_css_err_internal_error;
+
+	width = binary->morph_tbl_width,
+	height = binary->morph_tbl_height;
+
+	tab = sh_css_morph_table_allocate(width, height);
+	if (tab == NULL)
+		return sh_css_err_cannot_allocate_memory;
+
+	for (i = 0; i < SH_CSS_MORPH_TABLE_NUM_PLANES; i++) {
+		for (j = 0; j < height; j++) {
+			unsigned short *in_x_ptr, *in_y_ptr,
+				       *out_x_ptr, *out_y_ptr;
+			in_x_ptr = &in_table->coordinates_x[i][j * width];
+			in_y_ptr = &in_table->coordinates_y[i][j * width];
+			out_x_ptr = &tab->coordinates_x[i][j * width];
+			out_y_ptr = &tab->coordinates_y[i][j * width];
+			for (k = 0; k < width; k++, in_x_ptr++, in_y_ptr++,
+						out_x_ptr++, out_y_ptr++) {
+				*out_x_ptr = *in_x_ptr + phase_shift_x[i];
+				*out_y_ptr = *in_y_ptr + phase_shift_y[i];
+			}
+		}
+	}
+	*out_table = tab;
+
+	sh_css_dtrace(SH_DBG_TRACE_PRIVATE,
+		"sh_css_params_morph_table_shift_phase() leave:\n");
+
+	return sh_css_success;
+}
 static enum sh_css_err sh_css_params_default_morph_table(
 	struct sh_css_morph_table **table,
 	const struct sh_css_binary *binary)
@@ -3268,8 +3327,6 @@ static enum sh_css_err sh_css_params_default_morph_table(
 		     step = (ISP_VEC_NELEMS / 16) * 128,
 		     width,
 		     height;
-	short start_x[SH_CSS_MORPH_TABLE_NUM_PLANES] = { -8, 0, -8, 0, 0, -8 },
-	      start_y[SH_CSS_MORPH_TABLE_NUM_PLANES] = { 0, 0, -8, -8, -8, 0 };
 	struct sh_css_morph_table *tab;
 
 	sh_css_dtrace(SH_DBG_TRACE_PRIVATE,
@@ -3293,25 +3350,25 @@ static enum sh_css_err sh_css_params_default_morph_table(
 	}
 
 	for (i = 0; i < SH_CSS_MORPH_TABLE_NUM_PLANES; i++) {
-		short val_y = start_y[i];
+		short val_y = 0;
 		for (j = 0; j < height; j++) {
-			short val_x = start_x[i];
+			short val_x = 0;
 			unsigned short *x_ptr, *y_ptr;
 
 			x_ptr = &tab->coordinates_x[i][j * width];
 			y_ptr = &tab->coordinates_y[i][j * width];
 			for (k = 0; k < width;
 			     k++, x_ptr++, y_ptr++, val_x += step) {
-				if (k == 0)
-					*x_ptr = 0;
-				else if (k == width - 1)
-					*x_ptr = val_x + 2 * start_x[i];
-				else
-					*x_ptr = val_x;
-				if (j == 0)
-					*y_ptr = 0;
-				else
-					*y_ptr = val_y;
+				*x_ptr = val_x;
+				*y_ptr = val_y;
+
+				// TODO: We might need to ensure that
+				// the last grid in x&y direction is within
+				// input space.
+				//if (k==width-1)
+				//	*x_ptr -= 4 * (1<<4);
+				//if (j==height-1)
+				//	*y_ptr -= 4 * (1<<4);
 			}
 			val_y += step;
 		}
@@ -4606,6 +4663,7 @@ void sh_css_set_isp_config(
 	sh_css_set_cc_config(&config->cc_config);
 	sh_css_set_tnr_config(&config->tnr_config);
 	sh_css_set_ob_config(&config->ob_config);
+	sh_css_set_dp_config(&config->dp_config);
 	sh_css_set_nr_config(&config->nr_config);
 	sh_css_set_ee_config(&config->ee_config);
 	sh_css_set_de_config(&config->de_config);
@@ -5878,33 +5936,25 @@ static enum sh_css_err sh_css_params_write_to_ddr_internal(
 		}
 		if (morph_table_changed || buff_realloced) {
 			const struct sh_css_morph_table *table = morph_table;
-			struct sh_css_morph_table *id_table = NULL;
-#if 0
-			if ((table != NULL) &&
-			    (table->width < binary->morph_tbl_width ||
-			     table->height < binary->morph_tbl_height)) {
-				table = NULL;
-			}
-			if (table == NULL) {
-				sh_css_params_default_morph_table(&id_table,
-								  binary);
-				table = id_table;
-			}
-#else
+			struct sh_css_morph_table *default_table = NULL;
+			struct sh_css_morph_table *modified_table = NULL;
 			/* 
 			 * @GC: We expect to receive a morph table with the
 			 * size that the binary expects
 			 */
-				
 			if (table != NULL) {
 				assert(table->width == binary->morph_tbl_width &&
 					table->height == binary->morph_tbl_height);
 			} else {
-				sh_css_params_default_morph_table(&id_table,
-								  binary);
-				table = id_table;
+				sh_css_params_default_morph_table(
+						&default_table,
+						binary);
+				table = default_table;
 			}
-#endif
+			sh_css_params_morph_table_shift_phase(table,
+							binary,
+							&modified_table);
+			table = modified_table;
 
 			for (i = 0; i < SH_CSS_MORPH_TABLE_NUM_PLANES; i++) {
 				write_morph_plane(table->coordinates_x[i],
@@ -5918,8 +5968,10 @@ static enum sh_css_err sh_css_params_write_to_ddr_internal(
 					*virt_addr_tetra_y[i],
 					binary->morph_tbl_aligned_width);
 			}
-			if (id_table != NULL)
-				sh_css_morph_table_free(id_table);
+			if (default_table != NULL)
+				sh_css_morph_table_free(default_table);
+			if (modified_table != NULL)
+				sh_css_morph_table_free(modified_table);
 		}
 	}
 	if (r_gamma_table && r_gamma_table_changed) {

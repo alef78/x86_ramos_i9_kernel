@@ -4299,6 +4299,22 @@ static enum sh_css_err sh_css_pipeline_stop(
 	(void)pipe;
 	/* For now, stop whole SP */
 	sh_css_write_host2sp_command(host2sp_cmd_terminate);
+
+	/*
+	 * Workaround against ISPFW bug. ISPFW sometimes misses the command
+	 * from IA. This WA can be removed if the ISPFW is corrected to
+	 * avoid race condition.
+	 *
+	 * WA: When the command is cleared immediately it is quite probable
+	 * that the FW just forgets the command without any real action.
+	 * To overcome this case resend the command if the previous one is
+	 * handled faster than expected.
+	 * There is a small probability that the cmd_terminate is handled twice.
+	 * This doesn't cause any side effects on FW side.
+	 */
+	if (sh_css_read_host2sp_command() == host2sp_cmd_ready)
+		sh_css_write_host2sp_command(host2sp_cmd_terminate);
+
 	sh_css_sp_set_sp_running(false);
 	sh_css_sp_uninit_pipeline(pipe);
 #ifdef __KERNEL__
@@ -4309,8 +4325,6 @@ static enum sh_css_err sh_css_pipeline_stop(
 		hrt_sleep();
 	}
 	if (timeout == 0) {
-		sh_css_dump_debug_info("sh_css_pipeline_stop point1");
-		sh_css_dump_sp_sw_debug_info();
 #ifdef __KERNEL__
 		printk(KERN_ERR "%s poll timeout point 1!!!\n", __func__);
 #endif
@@ -4318,13 +4332,11 @@ static enum sh_css_err sh_css_pipeline_stop(
 #ifdef __KERNEL__
 	printk("STOP_FUNC: reach point 2\n");
 #endif
-	while (!isp_ctrl_getbit(ISP0_ID, ISP_SC_REG, ISP_IDLE_BIT) && timeout) {
+	while (timeout && !isp_ctrl_getbit(ISP0_ID, ISP_SC_REG, ISP_IDLE_BIT)) {
 		timeout--;
 		hrt_sleep();
 	}
 	if (timeout == 0) {
-		sh_css_dump_debug_info("sh_css_pipeline_stop point2");
-		sh_css_dump_sp_sw_debug_info();
 #ifdef __KERNEL__
 		printk(KERN_ERR "%s poll timeout point 2!!!\n", __func__);
 #endif
@@ -4347,6 +4359,9 @@ static enum sh_css_err sh_css_pipeline_stop(
 
 	my_css.curr_pipe = NULL;
 	my_css.start_sp_copy = false;
+
+	if (timeout == 0)
+		return sh_css_err_internal_error;
 
 	return sh_css_success;
 }
@@ -6729,7 +6744,8 @@ static enum sh_css_err init_frame_planes(
 		init_single_plane(frame, &frame->planes.raw,
 				frame->info.height,
 				frame->info.padded_width,
-				frame->info.raw_bit_depth <= 8 ? 1 : 2);
+				// always use 2-bytes per pixel
+				2);
 		break;
 	case SH_CSS_FRAME_FORMAT_RGB565:
 		init_single_plane(frame, &frame->planes.rgb,

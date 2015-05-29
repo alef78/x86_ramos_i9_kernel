@@ -32,12 +32,12 @@
 
 #include "atomisp_internal.h"
 
-#ifdef CONFIG_VIDEO_ATOMISP_CSS20
+#ifdef CSS20
 #include "ia_css_types.h"
 #include "ia_css.h"
-#else /* CONFIG_VIDEO_ATOMISP_CSS20 */
+#else /* CSS20 */
 #include "sh_css_types.h"
-#endif /* CONFIG_VIDEO_ATOMISP_CSS20 */
+#endif /* CSS20 */
 
 struct atomisp_device;
 struct atomisp_css_frame;
@@ -279,6 +279,15 @@ int atomisp_shading_correction(struct atomisp_sub_device *asd, int flag,
 int atomisp_digital_zoom(struct atomisp_sub_device *asd, int flag,
 			 __s32 *value);
 
+#ifdef CSS20
+int atomisp_set_dvs_6axis_config(struct atomisp_sub_device *asd,
+					  struct atomisp_dvs_6axis_config
+					  *user_6axis_config);
+#endif
+
+int atomisp_compare_grid(struct atomisp_sub_device *asd,
+				struct atomisp_grid_info *atomgrid);
+
 int atomisp_get_sensor_mode_data(struct atomisp_sub_device *asd,
 				 struct atomisp_sensor_mode_data *config);
 
@@ -316,6 +325,9 @@ int atomisp_freq_scaling(struct atomisp_device *vdev,
 void atomisp_buf_done(struct atomisp_sub_device *asd, int error,
 		      enum atomisp_css_buffer_type buf_type,
 		      enum atomisp_css_pipe_id css_pipe_id,
-		      bool q_buffers);
+		      bool q_buffers, enum atomisp_input_stream_id stream_id);
 
+void atomisp_css_flush(struct atomisp_device *isp);
+int atomisp_source_pad_to_stream_id(struct atomisp_sub_device *asd,
+					   uint16_t source_pad);
 #endif /* __ATOMISP_CMD_H__ */

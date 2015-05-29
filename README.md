@@ -7,9 +7,8 @@ There were some issues with hardware reinitialization, that required patches to 
 Some of this work can be useful on other x86 Intel Mid tablets.
 
 Current status:
-kernel loads, boots to Android. usb, touchscreen, video, sound, mmc, sd card, power management,wifi,bluetooth,accelerometer sensor works ok. adb works. charging seems to work but needs testing
+kernel loads, boots to Android. usb, touchscreen, video, sound, mmc, sd card, power management,wifi,bluetooth,both cameras, accelerometer sensor works ok. adb works. charging seems to work but needs testing
 known problems:
-1) camera support needs minor fixes (video from back camera is flipped vertically and with wrong awb at 1080p resolution)
-2) charging needs minor fixes (currently it is safe to use but may not start charging sometimes)
+1) charging needs minor fixes (currently it is safe to use but may not start charging sometimes)
 
 Note: lcd panel, camera and smb347 drivers here are created by partial reverse-engeneering (of linux kernel and  modules that marked as GPL, but Ramos failed to publish its source code) and partially based on sources of similar tablets. I do not have datasheets for this hardware. On my tablet it works, but be careful of possible bugs.

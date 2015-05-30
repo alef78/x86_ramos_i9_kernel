@@ -7,8 +7,6 @@ There were some issues with hardware reinitialization, that required patches to 
 Some of this work can be useful on other x86 Intel Mid tablets.
 
 Current status:
-kernel loads, boots to Android. usb, touchscreen, video, sound, mmc, sd card, power management,wifi,bluetooth,both cameras, accelerometer sensor works ok. adb works. charging seems to work but needs testing
-known problems:
-1) charging needs minor fixes (currently it is safe to use but may not start charging sometimes)
+kernel loads, boots to Android. usb, touchscreen, video, sound, mmc, sd card, power management,wifi,bluetooth,both cameras, accelerometer sensor,charging works ok.
 
-Note: lcd panel, camera and smb347 drivers here are created by partial reverse-engeneering (of linux kernel and  modules that marked as GPL, but Ramos failed to publish its source code) and partially based on sources of similar tablets. I do not have datasheets for this hardware. On my tablet it works, but be careful of possible bugs.
+Note: lcd panel, camera, ft5x0x_ts, and smb347, max17047 drivers here are created by partial reverse-engeneering (of linux kernel and  modules that marked as GPL, but Ramos failed to publish its source code) and partially based on sources of similar tablets. I do not have datasheets for this hardware. Thanks to Acer, Dell, Asus for publishing GPL source code for their tablets. Especially to Acer, whose Iconia A1-830 is very similar to Ramos i9 except touch screen. On my tablet it works, but be careful of possible bugs.

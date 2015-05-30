@@ -1,5 +1,5 @@
-/*  Date: 2012/06/04 14:07:00
- *  Revision: 2.3
+/*  Date: 2011/12/29 12:37:00
+ *  Revision: 2.1
  */
 
 /*
@@ -44,9 +44,9 @@
 #define BMA250_DEFAULT_DELAY	200
 
 #define BMA250_CHIP_ID			3
-#define BMA250E_CHIP_ID			0xf9
+#define BMA250E_CHIP_ID			0xF9
 #define BMA250_RANGE_SET		0
-#define BMA250_BW_SET			0xA /*was: 4 */
+#define BMA250_BW_SET			10
 
 
 /*
@@ -188,6 +188,8 @@
 	((regvar & ~bitname##__MSK) | ((val<<bitname##__POS)&bitname##__MSK))
 
 
+#define to_dev(obj)	container_of(obj, struct device, kobj)
+
 /* range and bandwidth */
 
 #define BMA250_RANGE_2G                 3
@@ -249,23 +251,8 @@
 #define BMA250_COMP_TARGET_OFFSET_Z__MSK        0x60
 #define BMA250_COMP_TARGET_OFFSET_Z__REG        BMA250_OFFSET_PARAMS_REG
 
-//                                                          
-#define BMA250_EN_SOFT_RESET__POS         		0
-#define BMA250_EN_SOFT_RESET__LEN         		8
-#define BMA250_EN_SOFT_RESET__MSK         		0xFF
-#define BMA250_EN_SOFT_RESET__REG         		BMA250_RESET_REG
-#define BMA250_EN_SOFT_RESET_VALUE        		0xB6
 
-#define BMA250_OFFSET_TARGET_X					0
-#define BMA250_OFFSET_TARGET_Y					0
-#if defined(CONFIG_MACH_LGE_FX3_TMUS) || defined(CONFIG_MACH_LGE_F6_TMUS) || defined(CONFIG_MACH_LGE_FX3_WCDMA_TRF_US) || defined(CONFIG_MACH_LGE_L9II_OPEN_EU) || defined(CONFIG_MACH_LGE_F6_VDF) || defined(CONFIG_MACH_LGE_F6_ORG) || defined(CONFIG_MACH_LGE_F6_OPEN) || defined(CONFIG_MACH_LGE_F6_TMO)
-#define BMA250_OFFSET_TARGET_Z					1
-#else
-#define BMA250_OFFSET_TARGET_Z					2
-#endif
-
-#define BMA250_SHAKING_DETECT_THRESHOLD			(20)
-//                                    
+static struct kobject *acc_kobj;
 
 static const u8 bma250_valid_range[] = {
 	BMA250_RANGE_2G,
@@ -308,10 +295,6 @@ struct bma250_data {
 #endif
 
 	atomic_t selftest_result;
-
-//                                                          
-	atomic_t calibration_result;
-//                                    
 };
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
@@ -332,10 +315,10 @@ static int bma250_smbus_read_byte(struct i2c_client *client,
 }
 
 static int bma250_smbus_write_byte(struct i2c_client *client,
-		unsigned char reg_addr, unsigned char data)
+		unsigned char reg_addr, unsigned char *data)
 {
 	s32 dummy;
-	dummy = i2c_smbus_write_byte_data(client, reg_addr, data);
+	dummy = i2c_smbus_write_byte_data(client, reg_addr, *data);
 	if (dummy < 0)
 		return -1;
 	return 0;
@@ -386,7 +369,7 @@ static int bma250_set_mode(struct i2c_client *client, unsigned char Mode)
 			}
 
 			comres += bma250_smbus_write_byte(client,
-					BMA250_EN_LOW_POWER__REG, data1);
+					BMA250_EN_LOW_POWER__REG, &data1);
 		} else{
 			comres = -1;
 		}
@@ -432,7 +415,7 @@ static int bma250_set_range(struct i2c_client *client, unsigned char Range)
 					BMA250_RANGE_SEL, Range);
 
 			comres += bma250_smbus_write_byte(client,
-					BMA250_RANGE_SEL_REG, data1);
+					BMA250_RANGE_SEL_REG, &data1);
 		} else {
 			comres = -EINVAL;
 		}
@@ -479,7 +462,7 @@ static int bma250_set_bandwidth(struct i2c_client *client, unsigned char BW)
 					BMA250_BANDWIDTH__REG, &data);
 			data = BMA250_SET_BITSLICE(data, BMA250_BANDWIDTH, BW);
 			comres += bma250_smbus_write_byte(client,
-					BMA250_BANDWIDTH__REG, data);
+					BMA250_BANDWIDTH__REG, &data);
 		} else {
 			comres = -EINVAL;
 		}
@@ -510,23 +493,11 @@ static int bma250_get_bandwidth(struct i2c_client *client, unsigned char *BW)
 	return comres;
 }
 
-//                                                          
-static int bma250_soft_reset(struct i2c_client *client)
-{
-	int comres = 0;
-	unsigned char data = BMA250_EN_SOFT_RESET_VALUE ;
-
-	comres = bma250_smbus_write_byte(client, BMA250_EN_SOFT_RESET__REG, data);
-
-	return comres;
-}
-//                                    
-
 static int bma250_read_accel_xyz(struct i2c_client *client,
 		struct bma250acc *acc)
 {
 	int comres;
-	unsigned char data[6];
+	unsigned char data[6]= {0};
 	if (client == NULL) {
 		comres = -1;
 	} else{
@@ -569,7 +540,7 @@ static int bma250_set_ee_w(struct i2c_client *client, unsigned char eew)
 			BMA250_UNLOCK_EE_WRITE_SETTING__REG, &data);
 	data = BMA250_SET_BITSLICE(data, BMA250_UNLOCK_EE_WRITE_SETTING, eew);
 	comres = bma250_smbus_write_byte(client,
-			BMA250_UNLOCK_EE_WRITE_SETTING__REG, data);
+			BMA250_UNLOCK_EE_WRITE_SETTING__REG, &data);
 	return comres;
 }
 
@@ -586,7 +557,7 @@ static int bma250_set_ee_prog_trig(struct i2c_client *client)
 	data = BMA250_SET_BITSLICE(data,
 				BMA250_START_EE_WRITE_SETTING, eeprog);
 	comres = bma250_smbus_write_byte(client,
-			BMA250_START_EE_WRITE_SETTING__REG, data);
+			BMA250_START_EE_WRITE_SETTING__REG, &data);
 	return comres;
 }
 
@@ -616,15 +587,17 @@ static void bma250_work_func(struct work_struct *work)
 	input_report_abs(bma250->input, ABS_X, acc.x);
 	input_report_abs(bma250->input, ABS_Y, acc.y);
 	input_report_abs(bma250->input, ABS_Z, acc.z);
+//	printk(KERN_ERR "MIN****X=%d***Y=%d**Z=%d\n",acc.x,acc.y,acc.z);
 	input_sync(bma250->input);
 	bma250->value = acc;
 	schedule_delayed_work(&bma250->work, delay);
 }
 
-static ssize_t bma250_range_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
+static ssize_t bma250_range_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
 {
 	unsigned char data;
+	struct device *dev = to_dev(kobj->parent);
 	struct i2c_client *client = to_i2c_client(dev);
 	struct bma250_data *bma250 = i2c_get_clientdata(client);
 
@@ -634,12 +607,13 @@ static ssize_t bma250_range_show(struct device *dev,
 	return sprintf(buf, "%d\n", data);
 }
 
-static ssize_t bma250_range_store(struct device *dev,
-		struct device_attribute *attr,
+static ssize_t bma250_range_store(struct kobject *kobj,
+		struct kobj_attribute *attr,
 		const char *buf, size_t count)
 {
 	unsigned long data;
 	int error;
+	struct device *dev = to_dev(kobj->parent);
 	struct i2c_client *client = to_i2c_client(dev);
 	struct bma250_data *bma250 = i2c_get_clientdata(client);
 
@@ -653,10 +627,11 @@ static ssize_t bma250_range_store(struct device *dev,
 	return count;
 }
 
-static ssize_t bma250_bandwidth_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
+static ssize_t bma250_bandwidth_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
 {
 	unsigned char data;
+	struct device *dev = to_dev(kobj->parent);
 	struct i2c_client *client = to_i2c_client(dev);
 	struct bma250_data *bma250 = i2c_get_clientdata(client);
 
@@ -667,12 +642,13 @@ static ssize_t bma250_bandwidth_show(struct device *dev,
 
 }
 
-static ssize_t bma250_bandwidth_store(struct device *dev,
-		struct device_attribute *attr,
+static ssize_t bma250_bandwidth_store(struct kobject *kobj,
+		struct kobj_attribute *attr,
 		const char *buf, size_t count)
 {
 	unsigned long data;
 	int error;
+	struct device *dev = to_dev(kobj->parent);
 	struct i2c_client *client = to_i2c_client(dev);
 	struct bma250_data *bma250 = i2c_get_clientdata(client);
 
@@ -686,10 +662,11 @@ static ssize_t bma250_bandwidth_store(struct device *dev,
 	return count;
 }
 
-static ssize_t bma250_mode_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
+static ssize_t bma250_mode_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
 {
 	unsigned char data;
+	struct device *dev = to_dev(kobj->parent);
 	struct i2c_client *client = to_i2c_client(dev);
 	struct bma250_data *bma250 = i2c_get_clientdata(client);
 
@@ -699,12 +676,13 @@ static ssize_t bma250_mode_show(struct device *dev,
 	return sprintf(buf, "%d\n", data);
 }
 
-static ssize_t bma250_mode_store(struct device *dev,
-		struct device_attribute *attr,
+static ssize_t bma250_mode_store(struct kobject *kobj,
+		struct kobj_attribute *attr,
 		const char *buf, size_t count)
 {
 	unsigned long data;
 	int error;
+	struct device *dev = to_dev(kobj->parent);
 	struct i2c_client *client = to_i2c_client(dev);
 	struct bma250_data *bma250 = i2c_get_clientdata(client);
 
@@ -718,9 +696,10 @@ static ssize_t bma250_mode_store(struct device *dev,
 }
 
 
-static ssize_t bma250_value_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
+static ssize_t bma250_value_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
 {
+	struct device *dev = to_dev(kobj->parent);
 	struct input_dev *input = to_input_dev(dev);
 	struct bma250_data *bma250 = input_get_drvdata(input);
 	int err;
@@ -731,9 +710,10 @@ static ssize_t bma250_value_show(struct device *dev,
 	return err;
 }
 
-static ssize_t bma250_delay_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
+static ssize_t bma250_delay_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
 {
+	struct device *dev = to_dev(kobj->parent);
 	struct i2c_client *client = to_i2c_client(dev);
 	struct bma250_data *bma250 = i2c_get_clientdata(client);
 
@@ -741,12 +721,13 @@ static ssize_t bma250_delay_show(struct device *dev,
 
 }
 
-static ssize_t bma250_delay_store(struct device *dev,
-		struct device_attribute *attr,
+static ssize_t bma250_delay_store(struct kobject *kobj,
+		struct kobj_attribute *attr,
 		const char *buf, size_t count)
 {
 	unsigned long data;
 	int error;
+	struct device *dev = to_dev(kobj->parent);
 	struct i2c_client *client = to_i2c_client(dev);
 	struct bma250_data *bma250 = i2c_get_clientdata(client);
 
@@ -766,9 +747,10 @@ static ssize_t bma250_delay_store(struct device *dev,
 }
 
 
-static ssize_t bma250_enable_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
+static ssize_t bma250_enable_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
 {
+	struct device *dev = to_dev(kobj->parent);
 	struct i2c_client *client = to_i2c_client(dev);
 	struct bma250_data *bma250 = i2c_get_clientdata(client);
 
@@ -785,7 +767,8 @@ static void bma250_set_enable(struct device *dev, int enable)
 	mutex_lock(&bma250->enable_mutex);
 	if (enable) {
 		if (pre_enable == 0) {
-	                bma250_set_mode(bma250->bma250_client, 0);
+			bma250_set_mode(bma250->bma250_client,
+						BMA250_MODE_NORMAL);
 			schedule_delayed_work(&bma250->work,
 					msecs_to_jiffies(
 						atomic_read(&bma250->delay)));
@@ -794,7 +777,8 @@ static void bma250_set_enable(struct device *dev, int enable)
 
 	} else {
 		if (pre_enable == 1) {
-	                bma250_set_mode(bma250->bma250_client, 2);
+			bma250_set_mode(bma250->bma250_client,
+						BMA250_MODE_SUSPEND);
 			cancel_delayed_work_sync(&bma250->work);
 			atomic_set(&bma250->enable, 0);
 		}
@@ -803,10 +787,11 @@ static void bma250_set_enable(struct device *dev, int enable)
 
 }
 
-static ssize_t bma250_enable_store(struct device *dev,
-		struct device_attribute *attr,
+static ssize_t bma250_enable_store(struct kobject *kobj,
+		struct kobj_attribute *attr,
 		const char *buf, size_t count)
 {
+	struct device *dev = to_dev(kobj->parent);
 	unsigned long data;
 	int error;
 
@@ -819,10 +804,11 @@ static ssize_t bma250_enable_store(struct device *dev,
 	return count;
 }
 
-static ssize_t bma250_update_store(struct device *dev,
-		struct device_attribute *attr,
+static ssize_t bma250_update_store(struct kobject *kobj,
+		struct kobj_attribute *attr,
 		const char *buf, size_t count)
 {
+	struct device *dev = to_dev(kobj->parent);
 	struct i2c_client *client = to_i2c_client(dev);
 	struct bma250_data *bma250 = i2c_get_clientdata(client);
 
@@ -841,7 +827,7 @@ static int bma250_set_selftest_st(struct i2c_client *client,
 	data = BMA250_SET_BITSLICE(data,
 			BMA250_EN_SELF_TEST, selftest);
 	comres = bma250_smbus_write_byte(client,
-			BMA250_EN_SELF_TEST__REG, data);
+			BMA250_EN_SELF_TEST__REG, &data);
 
 	return comres;
 }
@@ -855,7 +841,7 @@ static int bma250_set_selftest_stn(struct i2c_client *client, unsigned char stn)
 			BMA250_NEG_SELF_TEST__REG, &data);
 	data = BMA250_SET_BITSLICE(data, BMA250_NEG_SELF_TEST, stn);
 	comres = bma250_smbus_write_byte(client,
-			BMA250_NEG_SELF_TEST__REG, data);
+			BMA250_NEG_SELF_TEST__REG, &data);
 
 	return comres;
 }
@@ -863,7 +849,7 @@ static int bma250_set_selftest_stn(struct i2c_client *client, unsigned char stn)
 static int bma250_read_accel_x(struct i2c_client *client, short *a_x)
 {
 	int comres;
-	unsigned char data[2];
+	unsigned char data[2] = {0};
 
 	comres = bma250_smbus_read_byte_block(client,
 			BMA250_ACC_X_LSB__REG, data, 2);
@@ -880,7 +866,7 @@ static int bma250_read_accel_x(struct i2c_client *client, short *a_x)
 static int bma250_read_accel_y(struct i2c_client *client, short *a_y)
 {
 	int comres;
-	unsigned char data[2];
+	unsigned char data[2] = {0};
 
 	comres = bma250_smbus_read_byte_block(client,
 			BMA250_ACC_Y_LSB__REG, data, 2);
@@ -898,7 +884,7 @@ static int bma250_read_accel_y(struct i2c_client *client, short *a_y)
 static int bma250_read_accel_z(struct i2c_client *client, short *a_z)
 {
 	int comres;
-	unsigned char data[2];
+	unsigned char data[2] = {0};
 
 	comres = bma250_smbus_read_byte_block(client,
 			BMA250_ACC_Z_LSB__REG, data, 2);
@@ -913,17 +899,18 @@ static int bma250_read_accel_z(struct i2c_client *client, short *a_z)
 	return comres;
 }
 
-static ssize_t bma250_selftest_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
+static ssize_t bma250_selftest_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
 {
+	struct device *dev = to_dev(kobj->parent);
 	struct i2c_client *client = to_i2c_client(dev);
 	struct bma250_data *bma250 = i2c_get_clientdata(client);
 
 	return sprintf(buf, "%d\n", atomic_read(&bma250->selftest_result));
 }
 
-static ssize_t bma250_selftest_store(struct device *dev,
-		struct device_attribute *attr,
+static ssize_t bma250_selftest_store(struct kobject *kobj,
+		struct kobj_attribute *attr,
 		const char *buf, size_t count)
 {
 	unsigned long data;
@@ -933,34 +920,9 @@ static ssize_t bma250_selftest_store(struct device *dev,
 	short value2 = 0;
 	short diff = 0;
 	unsigned long result = 0;
+	struct device *dev = to_dev(kobj->parent);
 	struct i2c_client *client = to_i2c_client(dev);
 	struct bma250_data *bma250 = i2c_get_clientdata(client);
-
-    //                                               
-    static bool first = true;
-    unsigned char power_mode, range1, range2;
-    printk(KERN_INFO "================================================\n");
-    if (bma250_get_range(bma250->bma250_client, &range1) < 0)
-        return -EINVAL;
-    if (bma250_get_mode(bma250->bma250_client, &power_mode) < 0)
-        return -EINVAL;
-    if (power_mode != BMA250_MODE_NORMAL) {
-        if (bma250_set_mode(bma250->bma250_client, BMA250_MODE_NORMAL) < 0)
-            return -EINVAL;
-        printk(KERN_INFO "mode change : %d -> %d\n", power_mode, BMA250_MODE_NORMAL);
-    }
-    //                                               
-
-    /*
-                                                                       
-                                                                                 
-     */
-    if (first) {
-        if (bma250_soft_reset(bma250->bma250_client) < 0)
-            return -EINVAL;
-        printk(KERN_INFO "first time of selftest!! softreset before test!!\n");
-        first = false;
-    }
 
 	error = strict_strtoul(buf, 10, &data);
 	if (error)
@@ -969,10 +931,10 @@ static ssize_t bma250_selftest_store(struct device *dev,
 	if (data != 1)
 		return -EINVAL;
 	/* set to 2 G range */
-	if (bma250_set_range(bma250->bma250_client, BMA250_RANGE_2G) < 0)
+	if (bma250_set_range(bma250->bma250_client, 0) < 0)
 		return -EINVAL;
 
-	bma250_smbus_write_byte(bma250->bma250_client, 0x32, clear_value);
+	bma250_smbus_write_byte(bma250->bma250_client, 0x32, &clear_value);
 	/* 1 for x-axis*/
 	bma250_set_selftest_st(bma250->bma250_client, 1);
 	/* positive direction*/
@@ -985,7 +947,7 @@ static ssize_t bma250_selftest_store(struct device *dev,
 	bma250_read_accel_x(bma250->bma250_client, &value2);
 	diff = value1-value2;
 
-	printk(KERN_INFO "diff x is %d, value1 is %d, value2 is %d\n",
+	printk(KERN_ERR "diff x is %d, value1 is %d, value2 is %d\n",
 			diff, value1, value2);
 
 	if (abs(diff) < 204)
@@ -1002,7 +964,7 @@ static ssize_t bma250_selftest_store(struct device *dev,
 	mdelay(10);
 	bma250_read_accel_y(bma250->bma250_client, &value2);
 	diff = value1-value2;
-	printk(KERN_INFO "diff y is %d, value1 is %d, value2 is %d\n",
+	printk(KERN_ERR "diff y is %d, value1 is %d, value2 is %d\n",
 			diff, value1, value2);
 	if (abs(diff) < 204)
 		result |= 2;
@@ -1019,34 +981,15 @@ static ssize_t bma250_selftest_store(struct device *dev,
 	bma250_read_accel_z(bma250->bma250_client, &value2);
 	diff = value1 - value2;
 
-	printk(KERN_INFO "diff z is %d, value1 is %d, value2 is %d\n",
+	printk(KERN_ERR "diff z is %d, value1 is %d, value2 is %d\n",
 			diff, value1, value2);
 	if (abs(diff) < 102)
 		result |= 4;
 
 	atomic_set(&bma250->selftest_result, (unsigned int) result);
 
-	printk(KERN_INFO "self test finished\n");
+	printk(KERN_ERR "self test finished\n");
 
-    //                                               
-    if (bma250_soft_reset(bma250->bma250_client) < 0)
-        return -EINVAL;
-	printk(KERN_INFO "soft reset finished\n");
-    mdelay(3);
-    if (bma250_get_range(bma250->bma250_client, &range2) < 0)
-        return -EINVAL;
-    if(range1 != range2) {
-        if (bma250_set_range(bma250->bma250_client, range1) < 0)
-            return -EINVAL;
-	    printk(KERN_INFO "range1(%d) is not equal to range2(%d) : range is restored\n", range1, range2);
-    }
-    if (power_mode != BMA250_MODE_NORMAL) {
-        if (bma250_set_mode(bma250->bma250_client, power_mode) < 0)
-            return -EINVAL;
-        printk(KERN_INFO "restore mode to %d\n", power_mode);
-    }
-    printk(KERN_INFO "================================================\n");
-    //                                               
 
 	return count;
 }
@@ -1062,7 +1005,7 @@ static int bma250_set_offset_target_x(struct i2c_client *client,
 	data = BMA250_SET_BITSLICE(data,
 			BMA250_COMP_TARGET_OFFSET_X, offsettarget);
 	comres = bma250_smbus_write_byte(client,
-			BMA250_COMP_TARGET_OFFSET_X__REG, data);
+			BMA250_COMP_TARGET_OFFSET_X__REG, &data);
 
 	return comres;
 }
@@ -1092,7 +1035,7 @@ static int bma250_set_offset_target_y(struct i2c_client *client,
 	data = BMA250_SET_BITSLICE(data,
 			BMA250_COMP_TARGET_OFFSET_Y, offsettarget);
 	comres = bma250_smbus_write_byte(client,
-			BMA250_COMP_TARGET_OFFSET_Y__REG, data);
+			BMA250_COMP_TARGET_OFFSET_Y__REG, &data);
 
 	return comres;
 }
@@ -1122,7 +1065,7 @@ static int bma250_set_offset_target_z(struct i2c_client *client,
 	data = BMA250_SET_BITSLICE(data,
 			BMA250_COMP_TARGET_OFFSET_Z, offsettarget);
 	comres = bma250_smbus_write_byte(client,
-			BMA250_COMP_TARGET_OFFSET_Z__REG, data);
+			BMA250_COMP_TARGET_OFFSET_Z__REG, &data);
 
 	return comres;
 }
@@ -1150,7 +1093,7 @@ static int bma250_set_offset_filt_x(struct i2c_client *client, unsigned char
 
 	data =  offsetfilt;
 	comres = bma250_smbus_write_byte(client, BMA250_OFFSET_FILT_X_REG,
-						data);
+						&data);
 
 	return comres;
 }
@@ -1177,7 +1120,7 @@ static int bma250_set_offset_filt_y(struct i2c_client *client, unsigned char
 
 	data =  offsetfilt;
 	comres = bma250_smbus_write_byte(client, BMA250_OFFSET_FILT_Y_REG,
-						data);
+						&data);
 
 	return comres;
 }
@@ -1203,7 +1146,7 @@ static int bma250_set_offset_filt_z(struct i2c_client *client, unsigned char
 
 	data =  offsetfilt;
 	comres = bma250_smbus_write_byte(client, BMA250_OFFSET_FILT_Z_REG,
-						data);
+						&data);
 
 	return comres;
 }
@@ -1247,16 +1190,17 @@ static int bma250_set_cal_trigger(struct i2c_client *client,
 	data = BMA250_SET_BITSLICE(data,
 			BMA250_EN_FAST_COMP, caltrigger);
 	comres = bma250_smbus_write_byte(client,
-			BMA250_EN_FAST_COMP__REG, data);
+			BMA250_EN_FAST_COMP__REG, &data);
 
 	return comres;
 }
 
 
-static ssize_t bma250_fast_calibration_x_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
+static ssize_t bma250_fast_calibration_x_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
 {
 	unsigned char data;
+	struct device *dev = to_dev(kobj->parent);
 	struct i2c_client *client = to_i2c_client(dev);
 	struct bma250_data *bma250 = i2c_get_clientdata(client);
 
@@ -1266,14 +1210,15 @@ static ssize_t bma250_fast_calibration_x_show(struct device *dev,
 	return sprintf(buf, "%d\n", data);
 }
 
-static ssize_t bma250_fast_calibration_x_store(struct device *dev,
-		struct device_attribute *attr,
+static ssize_t bma250_fast_calibration_x_store(struct kobject *kobj,
+		struct kobj_attribute *attr,
 		const char *buf, size_t count)
 {
 	unsigned long data;
 	signed char tmp;
 	unsigned int timeout = 0;
 	int error;
+	struct device *dev = to_dev(kobj->parent);
 	struct i2c_client *client = to_i2c_client(dev);
 	struct bma250_data *bma250 = i2c_get_clientdata(client);
 
@@ -1292,26 +1237,27 @@ static ssize_t bma250_fast_calibration_x_store(struct device *dev,
 		mdelay(2);
 		bma250_get_cal_ready(bma250->bma250_client, &tmp);
 
-		printk(KERN_INFO "wait 2ms and got cal ready flag is %d\n",
+		printk(KERN_ERR "wait 2ms and got cal ready flag is %d\n",
 				tmp);
 		timeout++;
 		if (timeout == 1000) {
-			printk(KERN_INFO "get fast calibration ready error\n");
+			printk(KERN_ERR "get fast calibration ready error\n");
 			return -EINVAL;
 		};
 
 	} while (tmp == 0);
 
-	printk(KERN_INFO "x axis fast calibration finished\n");
+	printk(KERN_ERR "x axis fast calibration finished\n");
 	return count;
 }
 
-static ssize_t bma250_fast_calibration_y_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
+static ssize_t bma250_fast_calibration_y_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
 {
 
 
 	unsigned char data;
+	struct device *dev = to_dev(kobj->parent);
 	struct i2c_client *client = to_i2c_client(dev);
 	struct bma250_data *bma250 = i2c_get_clientdata(client);
 
@@ -1322,14 +1268,15 @@ static ssize_t bma250_fast_calibration_y_show(struct device *dev,
 
 }
 
-static ssize_t bma250_fast_calibration_y_store(struct device *dev,
-		struct device_attribute *attr,
+static ssize_t bma250_fast_calibration_y_store(struct kobject *kobj,
+		struct kobj_attribute *attr,
 		const char *buf, size_t count)
 {
 	unsigned long data;
 	signed char tmp;
 	unsigned int timeout = 0;
 	int error;
+	struct device *dev = to_dev(kobj->parent);
 	struct i2c_client *client = to_i2c_client(dev);
 	struct bma250_data *bma250 = i2c_get_clientdata(client);
 
@@ -1348,26 +1295,27 @@ static ssize_t bma250_fast_calibration_y_store(struct device *dev,
 		mdelay(2);
 		bma250_get_cal_ready(bma250->bma250_client, &tmp);
 
-		printk(KERN_INFO "wait 2ms and got cal ready flag is %d\n",
+		printk(KERN_ERR "wait 2ms and got cal ready flag is %d\n",
 				tmp);
 		timeout++;
 		if (timeout == 1000) {
-			printk(KERN_INFO "get fast calibration ready error\n");
+			printk(KERN_ERR "get fast calibration ready error\n");
 			return -EINVAL;
 		};
 
 	} while (tmp == 0);
 
-	printk(KERN_INFO "y axis fast calibration finished\n");
+	printk(KERN_ERR "y axis fast calibration finished\n");
 	return count;
 }
 
-static ssize_t bma250_fast_calibration_z_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
+static ssize_t bma250_fast_calibration_z_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
 {
 
 
 	unsigned char data;
+	struct device *dev = to_dev(kobj->parent);
 	struct i2c_client *client = to_i2c_client(dev);
 	struct bma250_data *bma250 = i2c_get_clientdata(client);
 
@@ -1378,14 +1326,15 @@ static ssize_t bma250_fast_calibration_z_show(struct device *dev,
 
 }
 
-static ssize_t bma250_fast_calibration_z_store(struct device *dev,
-		struct device_attribute *attr,
+static ssize_t bma250_fast_calibration_z_store(struct kobject *kobj,
+		struct kobj_attribute *attr,
 		const char *buf, size_t count)
 {
 	unsigned long data;
 	signed char tmp;
 	unsigned int timeout = 0;
 	int error;
+	struct device *dev = to_dev(kobj->parent);
 	struct i2c_client *client = to_i2c_client(dev);
 	struct bma250_data *bma250 = i2c_get_clientdata(client);
 
@@ -1404,28 +1353,29 @@ static ssize_t bma250_fast_calibration_z_store(struct device *dev,
 		mdelay(2);
 		bma250_get_cal_ready(bma250->bma250_client, &tmp);
 
-		printk(KERN_INFO "wait 2ms and got cal ready flag is %d\n",
+		printk(KERN_ERR "wait 2ms and got cal ready flag is %d\n",
 				tmp);
 		timeout++;
 		if (timeout == 1000) {
-			printk(KERN_INFO "get fast calibration ready error\n");
+			printk(KERN_ERR "get fast calibration ready error\n");
 			return -EINVAL;
 		}
 
 	} while (tmp == 0);
 
-	printk(KERN_INFO "z axis fast calibration finished\n");
+	printk(KERN_ERR "z axis fast calibration finished\n");
 	return count;
 }
 
-static ssize_t bma250_eeprom_writing_store(struct device *dev,
-		struct device_attribute *attr,
+static ssize_t bma250_eeprom_writing_store(struct kobject *kobj,
+		struct kobj_attribute *attr,
 		const char *buf, size_t count)
 {
 	unsigned long data;
 	signed char tmp;
 	int timeout = 0;
 	int error;
+	struct device *dev = to_dev(kobj->parent);
 	struct i2c_client *client = to_i2c_client(dev);
 	struct bma250_data *bma250 = i2c_get_clientdata(client);
 
@@ -1442,40 +1392,41 @@ static ssize_t bma250_eeprom_writing_store(struct device *dev,
 	if (bma250_set_ee_w(bma250->bma250_client, 1) < 0)
 		return -EINVAL;
 
-	printk(KERN_INFO "unlock eeprom successful\n");
+	printk(KERN_ERR "unlock eeprom successful\n");
 
 	if (bma250_set_ee_prog_trig(bma250->bma250_client) < 0)
 		return -EINVAL;
-	printk(KERN_INFO "start update eeprom\n");
+	printk(KERN_ERR "start update eeprom\n");
 
 	do {
 		mdelay(2);
 		bma250_get_eeprom_writing_status(bma250->bma250_client, &tmp);
 
-		printk(KERN_INFO "wait 2ms eeprom write status is %d\n", tmp);
+		printk(KERN_ERR "wait 2ms eeprom write status is %d\n", tmp);
 		timeout++;
 		if (timeout == 1000) {
-			printk(KERN_INFO "get eeprom writing status error\n");
+			printk(KERN_ERR "get eeprom writing status error\n");
 			return -EINVAL;
 		};
 
 	} while (tmp == 0);
 
-	printk(KERN_INFO "eeprom writing is finished\n");
+	printk(KERN_ERR "eeprom writing is finished\n");
 
 	/* unlock eeprom */
 	if (bma250_set_ee_w(bma250->bma250_client, 0) < 0)
 		return -EINVAL;
 
-	printk(KERN_INFO "lock eeprom successful\n");
+	printk(KERN_ERR "lock eeprom successful\n");
 	return count;
 }
 
 
-static ssize_t bma250_eeprom_writing_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
+static ssize_t bma250_eeprom_writing_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
 {
 	unsigned char data;
+	struct device *dev = to_dev(kobj->parent);
 	struct i2c_client *client = to_i2c_client(dev);
 	struct bma250_data *bma250 = i2c_get_clientdata(client);
 
@@ -1487,10 +1438,11 @@ static ssize_t bma250_eeprom_writing_show(struct device *dev,
 }
 
 
-static ssize_t bma250_offset_filt_x_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
+static ssize_t bma250_offset_filt_x_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
 {
 	unsigned char data;
+	struct device *dev = to_dev(kobj->parent);
 	struct i2c_client *client = to_i2c_client(dev);
 	struct bma250_data *bma250 = i2c_get_clientdata(client);
 
@@ -1501,12 +1453,13 @@ static ssize_t bma250_offset_filt_x_show(struct device *dev,
 
 }
 
-static ssize_t bma250_offset_filt_x_store(struct device *dev,
-		struct device_attribute *attr,
+static ssize_t bma250_offset_filt_x_store(struct kobject *kobj,
+		struct kobj_attribute *attr,
 		const char *buf, size_t count)
 {
 	unsigned long data;
 	int error;
+	struct device *dev = to_dev(kobj->parent);
 	struct i2c_client *client = to_i2c_client(dev);
 	struct bma250_data *bma250 = i2c_get_clientdata(client);
 
@@ -1521,10 +1474,11 @@ static ssize_t bma250_offset_filt_x_store(struct device *dev,
 	return count;
 }
 
-static ssize_t bma250_offset_filt_y_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
+static ssize_t bma250_offset_filt_y_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
 {
 	unsigned char data;
+	struct device *dev = to_dev(kobj->parent);
 	struct i2c_client *client = to_i2c_client(dev);
 	struct bma250_data *bma250 = i2c_get_clientdata(client);
 
@@ -1535,12 +1489,13 @@ static ssize_t bma250_offset_filt_y_show(struct device *dev,
 
 }
 
-static ssize_t bma250_offset_filt_y_store(struct device *dev,
-		struct device_attribute *attr,
+static ssize_t bma250_offset_filt_y_store(struct kobject *kobj,
+		struct kobj_attribute *attr,
 		const char *buf, size_t count)
 {
 	unsigned long data;
 	int error;
+	struct device *dev = to_dev(kobj->parent);
 	struct i2c_client *client = to_i2c_client(dev);
 	struct bma250_data *bma250 = i2c_get_clientdata(client);
 
@@ -1555,10 +1510,11 @@ static ssize_t bma250_offset_filt_y_store(struct device *dev,
 	return count;
 }
 
-static ssize_t bma250_offset_filt_z_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
+static ssize_t bma250_offset_filt_z_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
 {
 	unsigned char data;
+	struct device *dev = to_dev(kobj->parent);
 	struct i2c_client *client = to_i2c_client(dev);
 	struct bma250_data *bma250 = i2c_get_clientdata(client);
 
@@ -1569,12 +1525,13 @@ static ssize_t bma250_offset_filt_z_show(struct device *dev,
 
 }
 
-static ssize_t bma250_offset_filt_z_store(struct device *dev,
-		struct device_attribute *attr,
+static ssize_t bma250_offset_filt_z_store(struct kobject *kobj,
+		struct kobj_attribute *attr,
 		const char *buf, size_t count)
 {
 	unsigned long data;
 	int error;
+	struct device *dev = to_dev(kobj->parent);
 	struct i2c_client *client = to_i2c_client(dev);
 	struct bma250_data *bma250 = i2c_get_clientdata(client);
 
@@ -1589,188 +1546,50 @@ static ssize_t bma250_offset_filt_z_store(struct device *dev,
 	return count;
 }
 
-//                                                          
-static ssize_t bma250_softreset_store(struct device *dev,
-		struct device_attribute *attr,
-		const char *buf, size_t count)
-{
-	struct i2c_client *client = to_i2c_client(dev);
-	struct bma250_data *bma250 = i2c_get_clientdata(client);
+static struct kobj_attribute dev_attr_range =
+__ATTR(range, 0664, bma250_range_show, bma250_range_store);
 
-	if (bma250_soft_reset(bma250->bma250_client) < 0)
-		return -EINVAL;
+static struct kobj_attribute dev_attr_bandwidth =
+__ATTR(bandwidth, 0664, bma250_bandwidth_show, bma250_bandwidth_store);
 
-	return count;
-}
+static struct kobj_attribute dev_attr_mode =
+__ATTR(mode, 0664, bma250_mode_show, bma250_mode_store);
 
-static int bma250_calibration(struct bma250_data *bma250, int axis)
-{
-	int timeout = 0;
-	signed char tmp;
+static struct kobj_attribute dev_attr_value =
+__ATTR(value, 0664, bma250_value_show, NULL);
 
-	struct bma250acc xyz, pre_xyz;
-	enum { X, Y, Z };
+static struct kobj_attribute dev_attr_delay =
+__ATTR(delay, 0664, bma250_delay_show, bma250_delay_store);
 
-	bma250_read_accel_xyz(bma250->bma250_client, &pre_xyz);
-	mdelay(50);
+static struct kobj_attribute dev_attr_enable =
+__ATTR(enable, 0664, bma250_enable_show, bma250_enable_store);
 
-	switch(axis) {
-		case X :
-			if(bma250_set_offset_target_x(bma250->bma250_client, (unsigned char)BMA250_OFFSET_TARGET_X) < 0)
-				return -EINVAL;
-			printk("%s: START fast calibration for X-axis\n", __func__);
-			break;
-		case Y :
-			if(bma250_set_offset_target_y(bma250->bma250_client, (unsigned char)BMA250_OFFSET_TARGET_Y) < 0)
-				return -EINVAL;
-			printk("%s: START fast calibration for Y-axis\n", __func__);
-			break;
-		case Z :
-			if(bma250_set_offset_target_z(bma250->bma250_client, (unsigned char)BMA250_OFFSET_TARGET_Z) < 0)
-				return -EINVAL;
-			printk("%s: START fast calibration for Z-axis\n", __func__);
-			break;
-		default :
-			printk("%s: calibration error with invalid axis\n", __func__);
-			return -EINVAL;
-	}
+static struct kobj_attribute dev_attr_update =
+__ATTR(update, 0664, NULL, bma250_update_store);
 
-	if(bma250_set_cal_trigger(bma250->bma250_client, (unsigned char)(axis+1)) < 0)
-		return -EINVAL;
+static struct kobj_attribute dev_attr_selftest =
+__ATTR(selftest, 0664, bma250_selftest_show, bma250_selftest_store);
 
-	do {
-		mdelay(2);
-		bma250_get_cal_ready(bma250->bma250_client, &tmp);
+static struct kobj_attribute dev_attr_fast_calibration_x =
+__ATTR(fast_calibration_x, 0664, bma250_fast_calibration_x_show, bma250_fast_calibration_x_store);
 
-		bma250_read_accel_xyz(bma250->bma250_client, &xyz);
-		if( (tmp == 0)	&&
-			((abs(xyz.x - pre_xyz.x) > BMA250_SHAKING_DETECT_THRESHOLD)
-			|| (abs((xyz.y - pre_xyz.y)) > BMA250_SHAKING_DETECT_THRESHOLD)
-			|| (abs((xyz.z - pre_xyz.z)) > BMA250_SHAKING_DETECT_THRESHOLD)) )
-		{
-			printk("%s: fast calibration is failed due to BMA250_SHAKING\n", __func__);
-			printk("%s: (%d, %d), (%d, %d), (%d, %d)\n", __func__, xyz.x, pre_xyz.x, xyz.y, pre_xyz.y, xyz.z, pre_xyz.z);
-			return -EINVAL;
-		}
+static struct kobj_attribute dev_attr_fast_calibration_y =
+__ATTR(fast_calibration_y, 0664, bma250_fast_calibration_y_show, bma250_fast_calibration_y_store);
 
-		printk("%s: cal ready flag is %d\n", __func__, tmp);
+static struct kobj_attribute dev_attr_fast_calibration_z =
+__ATTR(fast_calibration_z, 0664, bma250_fast_calibration_z_show, bma250_fast_calibration_z_store);
 
-		timeout++;
-		if (timeout == 1000) {
-			printk("%s: calibration is falied due to TIMEOUT\n", __func__);
-			return -EINVAL;
-		}
+static struct kobj_attribute dev_attr_eeprom_writing =
+__ATTR(eeprom_writing, 0664, bma250_eeprom_writing_show, bma250_eeprom_writing_store);
 
-	} while (tmp == 0);
+static struct kobj_attribute dev_attr_offset_filt_x =
+__ATTR(offset_filt_x, 0664, bma250_offset_filt_x_show, bma250_offset_filt_x_store);
 
-	return 0;
-}
+static struct kobj_attribute dev_attr_offset_filt_y =
+__ATTR(offset_filt_y, 0664, bma250_offset_filt_y_show, bma250_offset_filt_y_store);
 
-static ssize_t bma250_calibration_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	struct i2c_client *client = to_i2c_client(dev);
-	struct bma250_data *bma250 = i2c_get_clientdata(client);
-
-	return sprintf(buf, "%d\n", atomic_read(&bma250->calibration_result));
-}
-
-static ssize_t bma250_calibration_store(struct device *dev,
-		struct device_attribute *attr,
-		const char *buf, size_t count)
-{
-	int idx;
-	unsigned char bw;
-	atomic_t cal_result;
-	struct i2c_client *client = to_i2c_client(dev);
-	struct bma250_data *bma250 = i2c_get_clientdata(client);
-
-	atomic_set(&bma250->calibration_result, 0);
-	atomic_set(&cal_result, 0);
-
-	printk("===================================================\n%s: START accel. sensor calibration\n", __func__);
-	if(bma250_get_bandwidth(bma250->bma250_client, &bw) < 0)
-		return -EINVAL;
-
-	if(bma250_set_bandwidth(bma250->bma250_client, 8) < 0)
-		return -EINVAL;
-	printk("%s: bandwidth is set to 8 from %d\n", __func__, bw);
-
-	for(idx=0; idx<3; idx++) {
-		if( bma250_calibration(bma250, idx) < 0 ) {
-			printk("%s: %d-axis calibration FAIL\n", __func__, idx+1);
-			break;
-		} else {
-			atomic_inc(&cal_result);
-			printk("%s: %d-axis calibration PASS\n", __func__, idx+1);
-		}
-	}
-
-	if(bma250_set_bandwidth(bma250->bma250_client, bw) < 0)
-		return -EINVAL;
-	printk("%s: bandwidth is set to %d again\n", __func__, bw);
-
-	if(atomic_read(&cal_result) == 3) {
-		atomic_set(&bma250->calibration_result, 1);
-		printk("%s: PASS!!!!!\n", __func__);
-	} else {
-		printk("%s: FAIL!!!!!\n", __func__);
-		return -EINVAL;
-	}
-	printk("%s: FINISH accel. sensor calibration\n===================================================\n", __func__);
-
-	return count;
-}
-
-static DEVICE_ATTR(softreset, S_IWUSR|S_IWGRP,
-		NULL, bma250_softreset_store);
-
-static DEVICE_ATTR(calibration, S_IRUGO|S_IWUSR|S_IWGRP,
-		bma250_calibration_show, bma250_calibration_store);
-//                                    
-
-
-static DEVICE_ATTR(bandwidth, S_IRUGO|S_IWUSR|S_IWGRP,
-		bma250_bandwidth_show, bma250_bandwidth_store);
-static DEVICE_ATTR(delay, S_IRUGO|S_IWUSR|S_IWGRP,
-		bma250_delay_show, bma250_delay_store);
-static DEVICE_ATTR(range, S_IRUGO|S_IWUSR|S_IWGRP,
-		bma250_range_show, bma250_range_store);
-static DEVICE_ATTR(mode, S_IRUGO|S_IWUSR|S_IWGRP,
-		bma250_mode_show, bma250_mode_store);
-static DEVICE_ATTR(value, S_IRUGO,
-		bma250_value_show, NULL);
-static DEVICE_ATTR(enable, S_IRUGO|S_IWUSR|S_IWGRP,
-		bma250_enable_show, bma250_enable_store);
-static DEVICE_ATTR(update, S_IRUGO|S_IWUSR|S_IWGRP,
-		NULL, bma250_update_store);
-static DEVICE_ATTR(selftest, S_IRUGO|S_IWUSR|S_IWGRP,
-		bma250_selftest_show, bma250_selftest_store);
-static DEVICE_ATTR(fast_calibration_x, S_IRUGO|S_IWUSR|S_IWGRP,
-		bma250_fast_calibration_x_show,
-		bma250_fast_calibration_x_store);
-static DEVICE_ATTR(fast_calibration_y, S_IRUGO|S_IWUSR|S_IWGRP,
-		bma250_fast_calibration_y_show,
-		bma250_fast_calibration_y_store);
-static DEVICE_ATTR(fast_calibration_z, S_IRUGO|S_IWUSR|S_IWGRP,
-		bma250_fast_calibration_z_show,
-		bma250_fast_calibration_z_store);
-
-static DEVICE_ATTR(eeprom_writing, S_IRUGO|S_IWUSR|S_IWGRP,
-		bma250_eeprom_writing_show, bma250_eeprom_writing_store);
-
-static DEVICE_ATTR(offset_filt_x, S_IRUGO|S_IWUSR|S_IWGRP,
-		bma250_offset_filt_x_show,
-		bma250_offset_filt_x_store);
-
-static DEVICE_ATTR(offset_filt_y, S_IRUGO|S_IWUSR|S_IWGRP,
-		bma250_offset_filt_y_show,
-		bma250_offset_filt_y_store);
-
-static DEVICE_ATTR(offset_filt_z, S_IRUGO|S_IWUSR|S_IWGRP,
-		bma250_offset_filt_z_show,
-		bma250_offset_filt_z_store);
-
+static struct kobj_attribute dev_attr_offset_filt_z =
+__ATTR(offset_filt_z, 0664, bma250_offset_filt_z_show, bma250_offset_filt_z_store);
 
 static struct attribute *bma250_attributes[] = {
 	&dev_attr_range.attr,
@@ -1788,29 +1607,24 @@ static struct attribute *bma250_attributes[] = {
 	&dev_attr_offset_filt_x.attr,
 	&dev_attr_offset_filt_y.attr,
 	&dev_attr_offset_filt_z.attr,
-	//                                                          
-	&dev_attr_softreset.attr,
-	&dev_attr_calibration.attr,
-	//                                    
 	NULL
 };
 
 static struct attribute_group bma250_attribute_group = {
-	.attrs = bma250_attributes,
-	.name = "accelerometer"
+	.attrs = bma250_attributes
 };
 
-static int bma250_input_init(struct bma250_data *bma250, struct device* pdev)
+static int bma250_input_init(struct bma250_data *bma250)
 {
 	struct input_dev *dev;
 	int err;
 
-	//dev = input_allocate_device();
-	dev = devm_input_allocate_device(pdev);
+	dev = input_allocate_device();
 	if (!dev)
 		return -ENOMEM;
 	dev->name = SENSOR_NAME;
 	dev->id.bustype = BUS_I2C;
+	dev->dev.parent = &bma250->bma250_client->dev;
 
 	input_set_capability(dev, EV_ABS, ABS_MISC);
 	input_set_abs_params(dev, ABS_X, ABSMIN_2G, ABSMAX_2G, 0, 0);
@@ -1836,6 +1650,21 @@ static void bma250_input_delete(struct bma250_data *bma250)
 	input_free_device(dev);
 }
 
+static int create_sysfs_interfaces(struct device *dev)
+{
+	int err;
+
+	acc_kobj = kobject_create_and_add("accelerometer", &dev->kobj);
+	if(!acc_kobj)
+		return -ENOMEM;
+
+	err = sysfs_create_group(acc_kobj, &bma250_attribute_group);
+	if (err)
+		kobject_put(acc_kobj);
+
+	return 0;
+}
+
 static int bma250_probe(struct i2c_client *client,
 		const struct i2c_device_id *id)
 {
@@ -1843,8 +1672,9 @@ static int bma250_probe(struct i2c_client *client,
 	int tempvalue;
 	struct bma250_data *data;
 
+	printk("bma250 start porbe!\n");
 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
-		printk(KERN_INFO "i2c_check_functionality error\n");
+		printk(KERN_ERR "i2c_check_functionality error\n");
 		goto exit;
 	}
 	data = kzalloc(sizeof(struct bma250_data), GFP_KERNEL);
@@ -1855,24 +1685,16 @@ static int bma250_probe(struct i2c_client *client,
 	/* read chip id */
 	tempvalue = 0;
 	tempvalue = i2c_smbus_read_word_data(client, BMA250_CHIP_ID_REG);
-
-	if (tempvalue < 0) {
-		printk(KERN_ERR "Bosch Sensortec Device not found, \
-				i2c error %#x \n", tempvalue);
-		err = tempvalue;
-		goto kfree_exit;
-	}
-
-	if ((tempvalue & 0xFF) == BMA250_CHIP_ID) {
-		printk(KERN_INFO "Bosch Sensortec Device detected!\n" \
+	if ((tempvalue&0x00FF) == BMA250_CHIP_ID) {
+		printk(KERN_ERR "Bosch Sensortec Device detected!\n" \
 				"BMA250 registered I2C driver!\n");
-	} else if ((tempvalue & 0xFF) == BMA250E_CHIP_ID) {
+	} else if ((tempvalue&0x00FF) == BMA250E_CHIP_ID) {
 		printk(KERN_INFO "Bosch SensortecE Device detected!\n" \
 				"BMA250E registered I2C driver!\n");
-	} else {
+	} else{
 		printk(KERN_ERR "Bosch Sensortec Device not found, \
-				chip ID mismatch");
-		err = -ENODEV;
+				i2c error %d \n", tempvalue);
+		err = -1;
 		goto kfree_exit;
 	}
 	i2c_set_clientdata(client, data);
@@ -1885,13 +1707,11 @@ static int bma250_probe(struct i2c_client *client,
 	INIT_DELAYED_WORK(&data->work, bma250_work_func);
 	atomic_set(&data->delay, BMA250_DEFAULT_DELAY);
 	atomic_set(&data->enable, 0);
-	err = bma250_input_init(data,&client->dev);
+	err = bma250_input_init(data);
 	if (err < 0)
 		goto kfree_exit;
 
-	//err = sysfs_create_group(&data->input->dev.kobj,
-	err = sysfs_create_group(&client->dev.kobj,
-			&bma250_attribute_group);
+	err = create_sysfs_interfaces(&client->dev);
 	if (err < 0)
 		goto error_sysfs;
 
@@ -1951,12 +1771,12 @@ static int bma250_remove(struct i2c_client *client)
 {
 	struct bma250_data *data = i2c_get_clientdata(client);
 
+	if (&client->dev)
 	bma250_set_enable(&client->dev, 0);
 #ifdef CONFIG_HAS_EARLYSUSPEND
 	unregister_early_suspend(&data->early_suspend);
 #endif
-	//sysfs_remove_group(&data->input->dev.kobj, &bma250_attribute_group);
-	sysfs_remove_group(&client->dev.kobj, &bma250_attribute_group);
+	sysfs_remove_group(&data->input->dev.kobj, &bma250_attribute_group);
 	bma250_input_delete(data);
 	kfree(data);
 	return 0;
@@ -1997,4 +1817,3 @@ MODULE_LICENSE("GPL");
 
 module_init(BMA250_init);
 module_exit(BMA250_exit);
-

@@ -1496,6 +1496,15 @@ config SENSORS_WM831X
 	  This driver can also be built as a module.  If so, the module
 	  will be called wm831x-hwmon.
 
+config SENSORS_BMA250
+        tristate "BMA250"
+        depends on I2C && INPUT
+        select INPUT_POLLDEV
+        default n
+        help
+          Say Yes here to enable the BMA250 Driver.
+          This driver will enable BMA250 device.
+
 config SENSORS_WM8350
 	tristate "Wolfson Microelectronics WM835x"
 	depends on MFD_WM8350

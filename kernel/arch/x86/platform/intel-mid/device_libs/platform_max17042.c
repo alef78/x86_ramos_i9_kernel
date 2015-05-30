@@ -12,65 +12,118 @@
 
 #include <linux/export.h>
 #include <linux/gpio.h>
-#include <asm/intel-mid.h>
 #include <linux/i2c.h>
 #include <linux/lnw_gpio.h>
 #include <linux/power_supply.h>
 #include <linux/power/max17042_battery.h>
-//#include <linux/power/intel_mdf_battery.h>
-#include <linux/power/smb347-a500cg-charger.h>
-//#include <linux/power/bq24192_charger.h>
-//#include <linux/power/bq24261_charger.h>
-#include <linux/power/battery_id.h>
-//#include <asm/pmic_pdata.h>
+#include <linux/power/intel_mdf_battery.h>
+
+#ifdef CONFIG_CHARGER_SMB347
+#include <linux/power/smb347-charger.h>
+#endif
+
+#ifdef CONFIG_CHARGER_BQ24192
+#include <linux/power/bq24192_charger.h>
+#include <linux/power/bq24261_charger.h>
+#endif
+
+#include <asm/pmic_pdata.h>
 #include <asm/intel-mid.h>
 #include <asm/delay.h>
 #include <asm/intel_scu_ipc.h>
-#include <linux/acpi.h>
-#include <linux/acpi_gpio.h>
 #include "platform_max17042.h"
-//#include "platform_bq24192.h"
-#include "platform_smb347.h"
-//#include <asm/intel_em_config.h>
 
-#define MRFL_SMIP_SRAM_ADDR		0xFFFCE000
-#define MOFD_SMIP_SRAM_ADDR		0xFFFC5C00
-#define MRFL_PLATFORM_CONFIG_OFFSET	0x3B3
-#define MRFL_SMIP_SHUTDOWN_OFFSET	1
-#define MRFL_SMIP_RESV_CAP_OFFSET	3
-
-#define MRFL_VOLT_SHUTDOWN_MASK (1 << 1)
-#define MRFL_NFC_RESV_MASK	(1 << 3)
-
-#define BYT_FFRD8_TEMP_MIN_LIM	0	/* 0degC */
-#define BYT_FFRD8_TEMP_MAX_LIM	55	/* 55degC */
-#define BYT_FFRD8_BATT_MIN_VOLT	3400	/* 3400mV */
-#define BYT_FFRD8_BATT_MAX_VOLT	4350	/* 4350mV */
-
-#define BYT_CRV2_TEMP_MIN_LIM	0	/* 0degC */
-#define BYT_CRV2_TEMP_MAX_LIM	45	/* 45degC */
-#define BYT_CRV2_BATT_MIN_VOLT	3400	/* 3400mV */
-#define BYT_CRV2_BATT_MAX_VOLT	4350	/* 4350mV */
-
+#define CONFIG_BOARD_CTP
 void max17042_i2c_reset_workaround(void)
 {
 /* toggle clock pin of I2C to recover devices from abnormal status.
  * currently, only max17042 on I2C needs such workaround */
+#if defined(CONFIG_BATTERY_INTEL_MDF)
+#define I2C_GPIO_PIN 27
+#elif defined(CONFIG_BOARD_CTP)
 #define I2C_GPIO_PIN 29
-	int i2c_gpio_pin = I2C_GPIO_PIN;
-	lnw_gpio_set_alt(i2c_gpio_pin, LNW_GPIO);
-	gpio_direction_output(i2c_gpio_pin, 0);
-	gpio_set_value(i2c_gpio_pin, 1);
+#elif defined(CONFIG_X86_MRFLD)
+#define I2C_GPIO_PIN 21
+#else
+#define I2C_GPIO_PIN 27
+#endif
+	lnw_gpio_set_alt(I2C_GPIO_PIN, LNW_GPIO);
+	gpio_direction_output(I2C_GPIO_PIN, 0);
+	gpio_set_value(I2C_GPIO_PIN, 1);
 	udelay(10);
-	gpio_set_value(i2c_gpio_pin, 0);
+	gpio_set_value(I2C_GPIO_PIN, 0);
 	udelay(10);
-	lnw_gpio_set_alt(i2c_gpio_pin, LNW_ALT_1);
+	lnw_gpio_set_alt(I2C_GPIO_PIN, LNW_ALT_1);
 }
 EXPORT_SYMBOL(max17042_i2c_reset_workaround);
 
-int mrfl_get_bat_health(void)
+
+static bool msic_battery_check(struct max17042_platform_data *pdata)
 {
-	return -ENODEV;
+	struct sfi_table_simple *sb;
+	char *mrfl_batt_str = "INTN0001";
+
+	sb = (struct sfi_table_simple *)get_oem0_table();
+	if (sb == NULL) {
+		pr_info("invalid battery detected\n");
+		snprintf(pdata->battid, BATTID_LEN + 1, "UNKNOWNB");
+		snprintf(pdata->serial_num, SERIAL_NUM_LEN + 1, "000000");
+		return false;
+	} else {
+		pr_info("valid battery detected\n");
+		/* First entry in OEM0 table is the BATTID. Read battid
+		 * if pentry is not NULL and header length is greater
+		 * than BATTID length*/
+		if (sb->pentry && sb->header.len >= BATTID_LEN) {
+			if (!((INTEL_MID_BOARD(1, TABLET, MRFL)) ||
+				(INTEL_MID_BOARD(1, PHONE, MRFL)))) {
+				snprintf(pdata->battid, BATTID_LEN + 1, "%s",
+						(char *)sb->pentry);
+			} else {
+				if (strncmp((char *)sb->pentry,
+					"PG000001", (BATTID_LEN)) == 0) {
+					snprintf(pdata->battid,
+						(BATTID_LEN + 1),
+							"%s", mrfl_batt_str);
+				} else {
+					snprintf(pdata->battid,
+						(BATTID_LEN + 1),
+						"%s", (char *)sb->pentry);
+				}
+			}
+
+			/* First 2 bytes represent the model name
+			 * and the remaining 6 bytes represent the
+			 * serial number. */
+			if (pdata->battid[0] == 'I' &&
+				pdata->battid[1] >= '0'
+					&& pdata->battid[1] <= '9') {
+				unsigned char tmp[SERIAL_NUM_LEN + 2];
+				int i;
+				snprintf(pdata->model_name,
+					(MODEL_NAME_LEN) + 1,
+						"%s", pdata->battid);
+				memcpy(tmp, sb->pentry, BATTID_LEN);
+				for (i = 0; i < SERIAL_NUM_LEN; i++) {
+					sprintf(pdata->serial_num + i*2,
+					"%02x", tmp[i + MODEL_NAME_LEN]);
+				}
+				if ((2 * SERIAL_NUM_LEN) <
+					ARRAY_SIZE(pdata->serial_num))
+					pdata->serial_num[2 * SERIAL_NUM_LEN]
+								 = '\0';
+			} else {
+				snprintf(pdata->model_name,
+						(MODEL_NAME_LEN + 1),
+						"%s", pdata->battid);
+				snprintf(pdata->serial_num,
+						(SERIAL_NUM_LEN + 1), "%s",
+				pdata->battid + MODEL_NAME_LEN);
+			}
+		}
+		return true;
+	}
+	return false;
 }
 
 #define UMIP_REF_FG_TBL			0x806	/* 2 bytes */
@@ -84,13 +137,12 @@ int mrfl_get_bat_health(void)
  */
 int mfld_fg_restore_config_data(const char *name, void *data, int len)
 {
-	int ret = 0;
-#ifdef CONFIG_X86_MDFLD
-	int mip_offset;
+	int mip_offset, ret;
+
 	/* Read the fuel gauge config data from umip */
 	mip_offset = UMIP_REF_FG_TBL + BATT_FG_TBL_BODY;
 	ret = intel_scu_ipc_read_mip((u8 *)data, len, mip_offset, 0);
-#endif
+
 	return ret;
 }
 EXPORT_SYMBOL(mfld_fg_restore_config_data);
@@ -104,13 +156,12 @@ EXPORT_SYMBOL(mfld_fg_restore_config_data);
  */
 int mfld_fg_save_config_data(const char *name, void *data, int len)
 {
-	int ret = 0;
-#ifdef CONFIG_X86_MDFLD
-	int mip_offset;
+	int mip_offset, ret;
+
 	/* write the fuel gauge config data to umip */
 	mip_offset = UMIP_REF_FG_TBL + BATT_FG_TBL_BODY;
 	ret = intel_scu_ipc_write_umip((u8 *)data, len, mip_offset);
-#endif
+
 	return ret;
 }
 EXPORT_SYMBOL(mfld_fg_save_config_data);
@@ -159,105 +210,110 @@ static int ctp_fg_save_config_data(const char *name, void *data, int len)
 }
 EXPORT_SYMBOL(ctp_fg_save_config_data);
 
-static bool ctp_is_volt_shutdown_enabled(void)
+int mrfl_get_bat_health(void)
 {
-	return true;
-}
+return -ENODEV; // from ramos i9 binary
+	int pbat_health = -ENODEV;
+	int bqbat_health = -ENODEV;
+#ifdef CONFIG_BQ24261_CHARGER
+	 bqbat_health = bq24261_get_bat_health();
+#endif
+#ifdef CONFIG_PMIC_CCSM
+	pbat_health = pmic_get_health();
+#endif
 
-static int ctp_get_vsys_min(void)
-{
-	return 3400000;//ok - disasm
-}
+	/*Battery temperature exceptions are reported to PMIC. ALl other
+	* exceptions are reported to bq24261 charger. Need to read the
+	* battery health reported by both drivers, before reporting
+	* the actual battery health
+	*/
 
-static int ctp_get_0level_batt_volt(void)
-{
-	return 4300000;//ok - disasm
+	/* FIXME: need to have a time stamp based implementation to
+	* report battery health
+	*/
+
+	if (pbat_health < 0 && bqbat_health < 0)
+		return pbat_health;
+	if (pbat_health > 0 && pbat_health != POWER_SUPPLY_HEALTH_GOOD)
+		return pbat_health;
+	else
+		return bqbat_health;
 }
 
 void *max17042_platform_data(void *info)
 {
-	static struct max17042_platform_data pdata;
+	static struct max17042_platform_data platform_data;
 	struct i2c_board_info *i2c_info = (struct i2c_board_info *)info;
-	struct sfi_table_simple *sb;
-	char *mrfl_batt_str = "INTN0001";
-	
 	int intr = get_gpio_by_name("max_fg_alert");
+
 	i2c_info->irq = intr + INTEL_MID_IRQ_OFFSET;
 
-	sb = (struct sfi_table_simple *)get_oem0_table();
-	if (sb == NULL) {
-		pr_info("invalid battery detected\n");
-		snprintf(pdata.battid, BATTID_LEN + 1, "UNKNOWNB");
-		snprintf(pdata.serial_num, SERIAL_NUM_LEN + 1, "000000");
-		pdata.valid_battery = false;
+	if (msic_battery_check(&platform_data)) {
+		platform_data.enable_current_sense = true;
+		platform_data.technology = POWER_SUPPLY_TECHNOLOGY_LION;
+
 	} else {
-		pr_info("valid battery detected\n");
-		/* First entry in OEM0 table is the BATTID. Read battid
-		 * if pentry is not NULL and header length is greater
-		 * than BATTID length*/
-		if (sb->pentry && sb->header.len >= BATTID_LEN) {
-			if (!((INTEL_MID_BOARD(1, TABLET, MRFL)) ||
-				(INTEL_MID_BOARD(1, PHONE, MRFL)))) {
-				snprintf(pdata.battid, BATTID_LEN + 1, "%s",
-						(char *)sb->pentry);
-			} else {
-				if (strncmp((char *)sb->pentry,
-					"PG000001", (BATTID_LEN)) == 0) {
-					snprintf(pdata.battid,
-						(BATTID_LEN + 1),
-						"%s", mrfl_batt_str);
-				} else {
-					snprintf(pdata.battid,
-						(BATTID_LEN + 1),
-						"%s", (char *)sb->pentry);
-				}
-			}
-
-			/* First 2 bytes represent the model name
-			 * and the remaining 6 bytes represent the
-			 * serial number. */
-			if (pdata.battid[0] == 'I' &&
-				pdata.battid[1] >= '0'
-					&& pdata.battid[1] <= '9') {
-				unsigned char tmp[SERIAL_NUM_LEN + 2];
-				int i;
-				snprintf(pdata.model_name,
-					(MODEL_NAME_LEN) + 1,
-						"%s", pdata.battid);
-				memcpy(tmp, sb->pentry, BATTID_LEN);
-				for (i = 0; i < SERIAL_NUM_LEN; i++) {
-					sprintf(pdata.serial_num + i*2,
-					"%02x", tmp[i + MODEL_NAME_LEN]);
-				}
-				if ((2 * SERIAL_NUM_LEN) <
-					ARRAY_SIZE(pdata.serial_num))
-					pdata.serial_num[2 * SERIAL_NUM_LEN]
-								 = '\0';
-			} else {
-				snprintf(pdata.model_name,
-						(MODEL_NAME_LEN + 1),
-						"%s", pdata.battid);
-				snprintf(pdata.serial_num,
-						(SERIAL_NUM_LEN + 1), "%s",
-				pdata.battid + MODEL_NAME_LEN);
-			}
-		}
-		pdata.valid_battery = false;
+		platform_data.enable_current_sense = false;
+		platform_data.technology = POWER_SUPPLY_TECHNOLOGY_UNKNOWN;
 	}
-	
-	pdata.en_vmax_intr = 0;
-	pdata.reset_i2c_lines = max17042_i2c_reset_workaround;
-	//pdata.fg_algo_model = 2;
-	pdata.technology = 2;
-	pdata.is_init_done = 1;
-	pdata.battery_health = ctp_get_battery_health;
-	//pdata.battery_pack_temp = ctp_get_battery_pack_temp;// not is ramos binary
 
-	pdata.is_volt_shutdown_enabled = ctp_is_volt_shutdown_enabled;
-	pdata.get_vmin_threshold = ctp_get_vsys_min;
-	pdata.enable_current_sense = 1;
-	pdata.get_vmax_threshold = ctp_get_0level_batt_volt;
-	pdata.battery_status = smb347_get_charging_status;
+	platform_data.is_init_done = 0;
+	platform_data.reset_i2c_lines = max17042_i2c_reset_workaround;
+#ifdef CONFIG_BATTERY_INTEL_MDF /* blackbay, not redridge, not ctp */
+	platform_data.current_sense_enabled =
+		intel_msic_is_current_sense_enabled;
+	platform_data.battery_present = intel_msic_check_battery_present;
+	platform_data.battery_health = intel_msic_check_battery_health;
+	platform_data.battery_status = intel_msic_check_battery_status;
+	platform_data.battery_pack_temp = intel_msic_get_battery_pack_temp;
+	platform_data.save_config_data = intel_msic_save_config_data;
+	platform_data.restore_config_data = intel_msic_restore_config_data;
 
-	return &pdata;
+	platform_data.is_cap_shutdown_enabled =
+					intel_msic_is_capacity_shutdown_en;
+	platform_data.is_volt_shutdown_enabled = intel_msic_is_volt_shutdown_en;
+	platform_data.is_lowbatt_shutdown_enabled =
+					intel_msic_is_lowbatt_shutdown_en;
+	platform_data.get_vmin_threshold = intel_msic_get_vsys_min;
+#endif
+#ifdef CONFIG_BOARD_REDRIDGE /* TODO: get rid of this */
+	platform_data.enable_current_sense = true;
+	platform_data.technology = POWER_SUPPLY_TECHNOLOGY_LION;
+	platform_data.temp_min_lim = 0;
+	platform_data.temp_max_lim = 60;
+	platform_data.volt_min_lim = 3200;
+	platform_data.volt_max_lim = 4300;
+	platform_data.restore_config_data = mfld_fg_restore_config_data;
+	platform_data.save_config_data = mfld_fg_save_config_data;
+#endif
+#ifdef CONFIG_BOARD_CTP
+	platform_data.technology = POWER_SUPPLY_TECHNOLOGY_LION;
+	platform_data.file_sys_storage_enabled = 1;
+	platform_data.battery_health = ctp_get_battery_health;
+	platform_data.is_volt_shutdown_enabled = ctp_is_volt_shutdown_enabled;
+	platform_data.get_vmin_threshold = ctp_get_vsys_min;
+	platform_data.soc_intr_mode_enabled = true;
+	platform_data.get_volt_avg_0_level = ctp_get_0level_batt_volt;
+#endif
+#ifdef CONFIG_CHARGER_SMB347 /* redridge dv10 */
+	/* smb347 charger driver needs to be ported to k3.4 by FT
+	 * comment out this line to get salitpa compiled for now
+	 */
+	platform_data.battery_status = smb347_get_charging_status;
+#endif
+#ifdef CONFIG_CHARGER_BQ24192 /* clovertrail */
+	platform_data.battery_status = ctp_query_battery_status;
+	platform_data.battery_pack_temp = ctp_get_battery_pack_temp;
+#endif
+
+#ifdef CONFIG_X86_MRFLD
+	platform_data.technology = POWER_SUPPLY_TECHNOLOGY_LION;
+	platform_data.file_sys_storage_enabled = 1;
+	platform_data.battery_health = mrfl_get_bat_health;
+	platform_data.soc_intr_mode_enabled = true;
+#endif
+#ifdef CONFIG_PMIC_CCSM
+	platform_data.battery_pack_temp = pmic_get_battery_pack_temp;
+#endif
+	return &platform_data;
 }

@@ -182,6 +182,7 @@ enum power_supply_type {
 	POWER_SUPPLY_TYPE_USB_CDP,	/* Charging Downstream Port */
 	POWER_SUPPLY_TYPE_USB_ACA,	/* Accessory Charger Adapters */
 	POWER_SUPPLY_TYPE_USB_HOST,	/* To support OTG devices */
+	POWER_SUPPLY_TYPE_SE1,		/* SE1(Apple) charging port */
 };
 
 enum power_supply_charger_event {
@@ -195,7 +196,7 @@ enum power_supply_charger_event {
 struct power_supply_charger_cap {
 	enum power_supply_charger_event chrg_evt;
 	enum power_supply_type chrg_type;
-	unsigned int mA; /* input current limit */
+	unsigned int ma; /* input current limit */
 };
 
 enum power_supply_charger_cable_type {

@@ -12,7 +12,7 @@
 #ifndef _PLATFORM_SMB347_H_
 #define _PLATFORM_SMB347_H_
 
-#define SMB347_IRQ_GPIO		52
+#define SMB347_IRQ_GPIO		93
+#define SMB347_SUSP_GPIO	89
 extern void *smb347_platform_data(void *info) __attribute__((weak));
-extern bool smb347_is_valid_batid(void);
 #endif

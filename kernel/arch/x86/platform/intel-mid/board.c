@@ -125,7 +125,7 @@
 #include "device_libs/platform_max3111.h"
 #include "device_libs/platform_max17042.h"
 #include "device_libs/platform_bq27x00.h"
-#include "device_libs/platform_a500cg_smb347.h"
+#include "device_libs/platform_smb347.h"
 /* HSI devices */
 #include "device_libs/platform_hsi_modem.h"
 #include "device_libs/platform_ffl_modem.h"
@@ -191,7 +191,7 @@ struct devs_id __initconst device_ids[] = {
 	{"bq27441", SFI_DEV_TYPE_I2C, 0, &bq27x00_platform_data, NULL},
 	{"bq24192", SFI_DEV_TYPE_I2C, 1, &bq24192_platform_data},
 	{"bq24261_charger", SFI_DEV_TYPE_I2C, 1, &bq24261_platform_data, NULL},
-	{"smb347", SFI_DEV_TYPE_I2C, 0, &smb347_platform_data},
+	{"smb347", SFI_DEV_TYPE_I2C, 1, &smb347_platform_data},
 	{"pn544", SFI_DEV_TYPE_I2C, 0, &pn544_platform_data, NULL},
 	//{"l3gd20", SFI_DEV_TYPE_I2C, 0, &l3g4200d_platform_data, NULL},
 	{"l3gd20_gyr", SFI_DEV_TYPE_I2C, 0, &no_platform_data, NULL},

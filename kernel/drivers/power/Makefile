@@ -61,4 +61,3 @@ obj-$(CONFIG_BYT_EC_BATTERY)	+= byt_ec_battery.o
 obj-$(CONFIG_DC_XPWR_BATTERY)	+= dc_xpwr_battery.o
 obj-$(CONFIG_DC_XPWR_CHARGER)	+= dc_xpwr_charger.o
 
-obj-y		+= ASUS_BATTERY/

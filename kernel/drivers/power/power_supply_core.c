@@ -35,7 +35,7 @@ static struct mutex ps_chrg_evt_lock;
 static struct power_supply_charger_cap power_supply_chrg_cap = {
 		.chrg_evt	= POWER_SUPPLY_CHARGER_EVENT_DISCONNECT,
 		.chrg_type	= POWER_SUPPLY_TYPE_USB,
-		.mA		= 0	/* 0 mA */
+		.ma		= 0	/* 0 mA */
 };
 static bool __power_supply_is_supplied_by(struct power_supply *supplier,
 					 struct power_supply *supply)

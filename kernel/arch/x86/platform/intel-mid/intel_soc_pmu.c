@@ -1118,7 +1118,7 @@ int verify_stack_ok(unsigned int *good_ebp, unsigned int *_ebp)
 
 size_t backtrace_safe(void **array, size_t max_size)
 {
-#ifndef CONFIG_64BIT
+#if defined(CONFIG_FRAME_POINTER) && !defined(CONFIG_64BIT)
 	unsigned int *_ebp, *base_ebp;
 	unsigned int *caller;
 	unsigned int i;

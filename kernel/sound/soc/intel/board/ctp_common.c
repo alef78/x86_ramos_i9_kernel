@@ -725,7 +725,7 @@ static struct platform_device_id ctp_audio_ids[] = {
 		.name		= "ctp_rhb_cs42l73",
 		.driver_data	= (kernel_ulong_t)&ctp_rhb_cs42l73_ops,
 	},
-	{
+/*	{
 		.name		= "ctp_vb_cs42l73",
 		.driver_data	= (kernel_ulong_t)&ctp_vb_cs42l73_ops,
 	},
@@ -740,7 +740,7 @@ static struct platform_device_id ctp_audio_ids[] = {
 	{
 		.name		= "ctp_lt_wm8994",
 		.driver_data	= (kernel_ulong_t)&ctp_lt_wm8994_ops,
-	},
+	},*/
 	{ },
 };
 MODULE_DEVICE_TABLE(platform, ctp_audio_ids);
